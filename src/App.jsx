@@ -4,7 +4,6 @@ import { api, eventsUrl } from './api.js'
 import { loadTranscript, saveTranscript, clearTranscript } from './persist.js'
 import { nextId } from './lib.js'
 import {
-  PIPELINE_STAGES,
   PREP_STAGES,
   STARTERS,
   SERVICE_CHIPS,
@@ -12,7 +11,6 @@ import {
 } from './constants.js'
 import Header from './components/Header.jsx'
 import Chat from './components/Chat.jsx'
-import BriefPanel from './components/BriefPanel.jsx'
 import GenerateWizard from './components/GenerateWizard.jsx'
 
 const EMPTY_PANEL = { brief: {}, missing: [], ready: false }
@@ -29,7 +27,6 @@ export default function App() {
   const [instructions, setInstructions] = useState('')
   const [showStarters, setShowStarters] = useState(false)
   const [env, setEnv] = useState('dev')
-  const [run, setRun] = useState({ visible: false, stages: [], result: null })
   const [printDate, setPrintDate] = useState('')
 
   // wizard
@@ -49,12 +46,11 @@ export default function App() {
   const instructionsRef = useRef('')
   const selectedScenarioRef = useRef('')
   const scenariosPreparedRef = useRef(false)
-  const runStagesRef = useRef([])
   const inputRef = useRef('')
   const activeStreamRef = useRef(null)
   const prepStreamRef = useRef(null)
   const inputElRef = useRef(null)
-  const chatRef = useRef(null)
+  const mainRef = useRef(null)
   const initRef = useRef(false)
 
   // ---- message helpers -----------------------------------------------------
@@ -83,19 +79,28 @@ export default function App() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, log: (m.log || '') + text } : m)))
   }
 
-  // Persist the chat (minus the transient "thinking" bubble and the session
-  // divider — the divider is re-added fresh on each restore).
+  // Persist the chat (minus the transient "thinking" bubble, the session
+  // divider — re-added fresh on each restore — and the brief card, which is
+  // live session state and would be stale in a restored transcript).
   useEffect(() => {
-    saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider'))
+    saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider' && m.kind !== 'brief'))
   }, [messages])
 
-  // Keep the chat scrolled to the newest message.
+  // Keep the chat scrolled to the newest message. `main` is the scroll
+  // container (the .chat div inside it just stacks the messages), and the
+  // rAF waits one frame so freshly-added cards have their final height
+  // before we jump to the bottom.
   useEffect(() => {
-    const el = chatRef.current
-    if (el) el.scrollTop = el.scrollHeight
+    const el = mainRef.current
+    if (!el) return
+    requestAnimationFrame(() => {
+      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
+    })
   }, [messages])
 
-  // ---- brief panel ---------------------------------------------------------
+  // ---- brief card (inline in the chat) --------------------------------------
+  // Keeps a single brief card in the stream: drop the previous one and append
+  // a fresh card after the reply, so it always sits under the latest exchange.
   function updateBrief(data) {
     const ns = {
       brief: data.brief || {},
@@ -104,6 +109,10 @@ export default function App() {
     }
     panelStateRef.current = ns
     setPanelState(ns)
+    setMessages((prev) => [
+      ...prev.filter((m) => m.kind !== 'brief'),
+      { id: nextId(), kind: 'brief', ...ns },
+    ])
   }
 
   // ---- conversation --------------------------------------------------------
@@ -149,32 +158,13 @@ export default function App() {
   }
   const send = () => sendText(inputRef.current)
 
-  // ---- pipeline checklist (right panel) -----------------------------------
-  function setPanelStage(stageKey, status, durationS) {
-    const stages = runStagesRef.current.map((s) => {
-      if (s.label !== stageKey) return s
-      const secs = status === 'ok' && durationS != null ? `${durationS}s` : status === 'ok' ? s.secs : ''
-      return { ...s, status, secs }
-    })
-    runStagesRef.current = stages
-    setRun((prev) => ({ ...prev, stages }))
-  }
-
+  // ---- generation ----------------------------------------------------------
   function startGeneration() {
     if (generatingRef.current || !panelStateRef.current.ready || !sessionIdRef.current) return
     const curEnv = envRef.current
     const instr = (instructionsRef.current || '').trim()
     generatingRef.current = true
     setGenerating(true)
-
-    const stages = PIPELINE_STAGES.map(([label, uiLabel]) => ({
-      label,
-      uiLabel,
-      status: scenariosPreparedRef.current && PREPARED_STAGES.includes(label) ? 'ok' : 'pending',
-      secs: '',
-    }))
-    runStagesRef.current = stages
-    setRun({ visible: true, stages, result: null })
 
     const bits = []
     if (instr) bits.push('with your instructions')
@@ -214,13 +204,6 @@ export default function App() {
       env: e.env || '',
     }
     addDone(spec)
-    if (spec.status === 'completed') {
-      const stages = runStagesRef.current.map((s) => (s.status === 'failed' ? s : { ...s, status: 'ok' }))
-      runStagesRef.current = stages
-      setRun((prev) => ({ ...prev, stages, result: spec }))
-    } else {
-      setRun((prev) => ({ ...prev, result: spec }))
-    }
     generatingRef.current = false
     setGenerating(false)
   }
@@ -244,16 +227,13 @@ export default function App() {
       }
       if (e.status === 'running') {
         patchMessage(id, { summary: `⏳ ${e.stage}`, open: true })
-        setPanelStage(e.stage, 'running')
       } else if (e.status === 'log') {
         appendLog(id, e.detail || '')
       } else if (e.status === 'ok') {
         const secs = e.duration_s != null ? ` · ${e.duration_s}s` : ''
         patchMessage(id, { summary: `✓ ${e.stage}${secs}`, open: false })
-        setPanelStage(e.stage, 'ok', e.duration_s)
       } else if (e.status === 'failed') {
         patchMessage(id, { summary: `✗ ${e.stage} ${e.detail || ''}`.trim(), open: true })
-        setPanelStage(e.stage, 'failed')
       }
     }
     es.onerror = () => {
@@ -400,8 +380,6 @@ export default function App() {
     busyRef.current = false
     generatingRef.current = false
     setGenerating(false)
-    setRun({ visible: false, stages: [], result: null })
-    runStagesRef.current = []
     setInstructions('')
     instructionsRef.current = ''
     // reset wizard
@@ -476,8 +454,18 @@ export default function App() {
     ? 'Generation in progress — logs stream in the chat.'
     : panelState.ready
       ? 'Click Generate — add optional instructions, pick a scenario, then build.'
-      : 'Answer the questions in the chat — the brief fills in here as you go.'
+      : 'Keep answering the questions — the brief updates as you go.'
   const genDisabled = !(panelState.ready && sessionId && !generating)
+
+  const briefUi = {
+    generating,
+    genDisabled,
+    onSlotClick,
+    env,
+    onEnvChange,
+    onGenerate: openWizard,
+    genHint,
+  }
 
   const brief = panelState.brief || {}
   const wizardSubtitle = [(brief.competencies || []).join(', '), brief.role]
@@ -492,9 +480,9 @@ export default function App() {
       </div>
 
       <div className="layout">
-        <main>
-          <div className="chat" ref={chatRef}>
-            <Chat messages={messages} />
+        <main ref={mainRef}>
+          <div className="chat">
+            <Chat messages={messages} briefUi={briefUi} />
           </div>
 
           {showStarters && (
@@ -527,19 +515,6 @@ export default function App() {
             </div>
           </div>
         </main>
-
-        <BriefPanel
-          panelState={panelState}
-          generating={generating}
-          genDisabled={genDisabled}
-          onSlotClick={onSlotClick}
-          env={env}
-          onEnvChange={onEnvChange}
-          envDisabled={generating}
-          onGenerate={openWizard}
-          genHint={genHint}
-          run={run}
-        />
       </div>
 
       <GenerateWizard

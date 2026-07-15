@@ -1,8 +1,7 @@
 export default function Header({ onNewTask, onDownloadPdf }) {
   return (
     <header>
-      <img className="logo" src="/logo.svg" alt="Utkrusht" width="28" height="28" />
-      <span className="wordmark">Utkrusht</span>
+      <img className="logo" src="/utkrusht-logo.png" alt="Utkrusht" />
       <span className="header-sep" aria-hidden="true"></span>
       <h1>
         Task <span className="shimmer">Builder</span>

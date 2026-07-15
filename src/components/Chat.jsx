@@ -1,11 +1,16 @@
 import { useEffect, useRef } from 'react'
+import BriefCard from './BriefCard.jsx'
 
 // Chat message renderers. `messages` is the source of truth; each item has a
-// `kind` (bubble | divider | stage | done). Mirrors the DOM the static UI built
-// imperatively.
+// `kind` (bubble | divider | stage | done | brief). Mirrors the DOM the static
+// UI built imperatively.
 
 function Row({ role, cls, children }) {
-  const avatar = <div className={`avatar ${role}`}>{role === 'user' ? 'Y' : 'U'}</div>
+  const avatar = (
+    <div className={`avatar ${role}`}>
+      {role === 'user' ? 'Y' : <img src="/favicon.png" alt="Utkrusht" />}
+    </div>
+  )
   const bubble = <div className={`bubble ${cls || ''}`}>{children}</div>
   return (
     <div className={`row ${role === 'user' ? 'user' : 'bot'}`}>
@@ -90,7 +95,7 @@ function Fragment({ label, value }) {
   )
 }
 
-export default function Chat({ messages }) {
+export default function Chat({ messages, briefUi }) {
   return (
     <>
       {messages.map((m) => {
@@ -103,6 +108,13 @@ export default function Chat({ messages }) {
         }
         if (m.kind === 'stage') return <StageLog m={m} key={m.id} />
         if (m.kind === 'done') return <DoneCard m={m} key={m.id} />
+        if (m.kind === 'brief') {
+          return (
+            <Row role="bot" cls="summary brief-card" key={m.id}>
+              <BriefCard m={m} ui={briefUi} />
+            </Row>
+          )
+        }
         // bubble
         return (
           <Row role={m.role} cls={m.cls} key={m.id}>
