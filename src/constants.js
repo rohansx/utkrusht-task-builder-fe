@@ -2,14 +2,14 @@ export const GREETING =
   "Hi! I'll help you put together a coding assessment. " +
   'First — what tech stack should the candidate work in?'
 
-// Mirrors task_builder/slots.py: five required slots + optional scenario_count.
+// Mirrors task_builder/slots.py: five required slots. scenario_count is
+// handled automatically by the pipeline, so it's not shown in the brief panel.
 export const SLOT_DEFS = [
   { key: 'competencies', label: 'Tech stack', list: true, required: true },
   { key: 'proficiency', label: 'Proficiency', required: true },
   { key: 'role', label: 'Role', required: true },
   { key: 'focus_areas', label: 'Focus areas', list: true, required: true },
   { key: 'domain', label: 'Domain', required: true },
-  { key: 'scenario_count', label: 'Scenarios', required: false, fallback: '6 (default)' },
 ]
 
 export const PIPELINE_STAGES = [
