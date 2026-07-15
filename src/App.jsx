@@ -9,6 +9,7 @@ import {
   STARTERS,
   SERVICE_CHIPS,
   SHAPE_CHIPS,
+  SLOT_DEFS,
 } from './constants.js'
 import Header from './components/Header.jsx'
 import Chat from './components/Chat.jsx'
@@ -18,6 +19,19 @@ import GenerateWizard from './components/GenerateWizard.jsx'
 const EMPTY_PANEL = { brief: {}, missing: [], ready: false }
 const PREPARED_STAGES = ['00_preflight', '01_input_files', '02_scenarios']
 const emptyScenarioStage = () => ({ mode: 'prep', prepStages: [], list: [], error: '' })
+
+// The brief is generation-ready once every REQUIRED slot is filled — this is
+// exactly what the backend's /api/generate gates on (brief.is_complete()). We
+// deliberately do NOT wait for the bot's `ready` confirmation flag: it stays
+// false until the user says "yes, confirm" in chat, which would otherwise
+// leave the Generate button disabled on a fully-filled brief.
+function isBriefComplete(brief) {
+  if (!brief) return false
+  return SLOT_DEFS.filter((d) => d.required).every((d) => {
+    const v = brief[d.key]
+    return d.list ? Array.isArray(v) && v.length > 0 : v != null && String(v).trim() !== ''
+  })
+}
 
 export default function App() {
   // ---- render state --------------------------------------------------------
@@ -97,6 +111,16 @@ export default function App() {
     const el = chatRef.current?.parentElement
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
+
+  // The inline generate wizard renders at the TOP of `main`. After a brief is
+  // filled `main` is scrolled to the bottom, so opening the wizard would leave
+  // it off-screen above the fold — the click "does nothing" from the user's
+  // view. Scroll it into view whenever it opens.
+  useEffect(() => {
+    if (!wizardOpen) return
+    const el = chatRef.current?.parentElement
+    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
+  }, [wizardOpen])
 
   // ---- brief panel ---------------------------------------------------------
   function updateBrief(data) {
@@ -278,7 +302,8 @@ export default function App() {
   }
 
   function openWizard() {
-    if (!sessionIdRef.current || !panelStateRef.current.ready || generatingRef.current) return
+    if (!sessionIdRef.current || !isBriefComplete(panelStateRef.current.brief) || generatingRef.current)
+      return
     setWizardStep('instructions')
     setWizardOpen(true)
   }
@@ -480,10 +505,10 @@ export default function App() {
 
   const genHint = generating
     ? 'Generation in progress — logs stream in the chat.'
-    : panelState.ready
+    : isBriefComplete(panelState.brief)
       ? 'Click Generate — add optional instructions, pick a scenario, then build.'
       : 'Answer the questions in the chat — the brief fills in here as you go.'
-  const genDisabled = !(panelState.ready && sessionId && !generating)
+  const genDisabled = !(isBriefComplete(panelState.brief) && sessionId && !generating)
 
   const brief = panelState.brief || {}
   const wizardSubtitle = [(brief.competencies || []).join(', '), brief.role]
