@@ -11,7 +11,12 @@ COPY package.json package-lock.json* ./
 RUN npm ci || npm install
 COPY . .
 ARG VITE_API_BASE=""
-ENV VITE_API_BASE=$VITE_API_BASE
+# Optional: bake the backend token into the bundle so the app never prompts.
+# WARNING: it becomes readable by anyone who loads the app — only use it for an
+# access-controlled frontend / non-sensitive API (see README "Access token").
+ARG VITE_INTERNAL_TOKEN=""
+ENV VITE_API_BASE=$VITE_API_BASE \
+    VITE_INTERNAL_TOKEN=$VITE_INTERNAL_TOKEN
 RUN npm run build
 
 FROM nginx:1.27-alpine AS runtime

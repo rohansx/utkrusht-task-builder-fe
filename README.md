@@ -23,16 +23,29 @@ browser, so **no CORS is needed in dev**.
 |-----|---------|
 | `VITE_API_BASE` | Absolute backend URL. **Leave empty for dev** (uses the proxy). In a production build it is baked in at build time and the app calls it cross-origin — the backend must send CORS headers (it does, via its `CORS_ALLOW_ORIGINS`). |
 | `VITE_DEV_PROXY_TARGET` | Dev-only: where `vite dev` proxies `/api` to when `VITE_API_BASE` is empty. |
+| `VITE_INTERNAL_TOKEN` | Optional backend access token. When set, the UI auto-attaches it and never prompts. ⚠️ **See the security note below.** |
 
-`VITE_*` values are **compile-time**. A production build bakes `VITE_API_BASE`
-into the bundle, so set it as a build arg (see `Dockerfile`), not a runtime env.
+`VITE_*` values are **compile-time**. A production build bakes them into the
+bundle, so set them as build args (see `Dockerfile`), not runtime envs.
 
 ## Access token
 
-Deployed backends set `INTERNAL_PROXY_TOKEN`; the UI prompts for it on the
-first `403`, stores it in `localStorage`, and sends it as `X-Internal-Token`
-(the SSE stream passes it as `?access_token=`, since `EventSource` cannot set
-headers).
+Deployed backends set `INTERNAL_PROXY_TOKEN`; every `/api/*` call must carry it
+as `X-Internal-Token` (the SSE stream passes it as `?access_token=`, since
+`EventSource` cannot set headers).
+
+Two ways to supply it:
+
+1. **Prompt (default, secure).** The UI prompts on the first `403`, stores the
+   token in `localStorage`, and attaches it from then on. The token never
+   appears in the shipped code.
+2. **`VITE_INTERNAL_TOKEN` (convenient, not secret).** Set it and the app
+   auto-attaches the token — no prompt. ⚠️ Vite **bakes it into the client
+   bundle**, so anyone who loads the app can read it (View Source / DevTools);
+   the token then no longer protects the API. Only use this when the frontend
+   itself is access-controlled or the API is not sensitive. For a public app,
+   prefer the prompt, or put a real auth layer in front (e.g. a server-side
+   proxy that injects the token).
 
 ## Build / deploy
 

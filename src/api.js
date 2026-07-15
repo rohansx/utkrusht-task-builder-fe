@@ -8,12 +8,21 @@ import { API_BASE } from './config.js'
 
 const TOKEN_KEY = 'taskbuilder.token'
 
+// Optional build-time token. When set, the UI auto-attaches it and never
+// prompts. SECURITY: Vite bakes this into the client bundle, so it is visible
+// to anyone who loads the app — only use it when the frontend itself is
+// access-controlled or the API is not sensitive. Leave empty to keep the
+// prompt-once flow (token stays out of the shipped code).
+const ENV_TOKEN = (import.meta.env.VITE_INTERNAL_TOKEN || '').trim()
+
 let apiToken = ''
 try {
   apiToken = localStorage.getItem(TOKEN_KEY) || ''
 } catch {
   /* storage unavailable — token re-prompted per page load */
 }
+// A configured build-time token wins, so a deployment can skip the prompt.
+if (ENV_TOKEN) apiToken = ENV_TOKEN
 
 export function getToken() {
   return apiToken
