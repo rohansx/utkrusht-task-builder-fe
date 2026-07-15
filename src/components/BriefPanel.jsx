@@ -42,20 +42,12 @@ export default function BriefPanel({
   generating,
   genDisabled,
   onSlotClick,
-  instructions,
-  onInstructionsChange,
-  suggest, // { status: 'loading' | '', items: [] }
-  onSuggestClick,
-  scenarioLabel,
-  scenarioPicked,
-  scenarioBtnLabel,
-  onChooseScenario,
   env,
   onEnvChange,
   envDisabled,
   onGenerate,
   genHint,
-  run, // { visible, stages: [{label,status,secs}], result }
+  run,
 }) {
   const { brief, missing, ready } = panelState
   const asking = generating ? null : missing.length ? missing[0] : null
@@ -98,57 +90,6 @@ export default function BriefPanel({
 
       <div className="panel-section panel-review">
         <div className="panel-title">Review &amp; generate</div>
-
-        {ready && (
-          <div id="review-fields">
-            <div className="review-field">
-              <label className="review-label" htmlFor="instructions">
-                Instructions
-                <span className="review-opt">optional — shapes the task</span>
-              </label>
-              <div className="suggest-chips">
-                {suggest.status === 'loading' ? (
-                  <span className="suggest-status">Loading suggestions…</span>
-                ) : (
-                  suggest.items.map((text, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className="suggest-chip"
-                      onClick={() => onSuggestClick(text)}
-                    >
-                      {text}
-                    </button>
-                  ))
-                )}
-              </div>
-              <textarea
-                id="instructions"
-                className="instructions"
-                rows="3"
-                value={instructions}
-                onChange={(e) => onInstructionsChange(e.target.value)}
-                placeholder="e.g. make it infra — require a Redis dependency + Dockerfile + run.sh"
-              />
-            </div>
-
-            <div className="review-field">
-              <div className="review-label">
-                Scenario
-                <span className="review-opt">optional — pick one or let the pipeline choose</span>
-              </div>
-              <div className="scenario-state">
-                <span className={`scenario-current${scenarioPicked ? ' picked' : ''}`}>
-                  {scenarioLabel}
-                </span>
-                <button className="link-btn" type="button" onClick={onChooseScenario}>
-                  {scenarioBtnLabel}
-                </button>
-              </div>
-            </div>
-          </div>
-        )}
-
         <label className="env-pick">
           Environment
           <select value={env} onChange={(e) => onEnvChange(e.target.value)} disabled={envDisabled}>

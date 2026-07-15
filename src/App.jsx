@@ -3,14 +3,21 @@ import { flushSync } from 'react-dom'
 import { api, eventsUrl } from './api.js'
 import { loadTranscript, saveTranscript, clearTranscript } from './persist.js'
 import { nextId } from './lib.js'
-import { PIPELINE_STAGES, PREP_STAGES, STARTERS } from './constants.js'
+import {
+  PIPELINE_STAGES,
+  PREP_STAGES,
+  STARTERS,
+  SERVICE_CHIPS,
+  SHAPE_CHIPS,
+} from './constants.js'
 import Header from './components/Header.jsx'
 import Chat from './components/Chat.jsx'
 import BriefPanel from './components/BriefPanel.jsx'
-import ScenarioModal from './components/ScenarioModal.jsx'
+import GenerateWizard from './components/GenerateWizard.jsx'
 
 const EMPTY_PANEL = { brief: {}, missing: [], ready: false }
 const PREPARED_STAGES = ['00_preflight', '01_input_files', '02_scenarios']
+const emptyScenarioStage = () => ({ mode: 'prep', prepStages: [], list: [], error: '' })
 
 export default function App() {
   // ---- render state --------------------------------------------------------
@@ -20,23 +27,18 @@ export default function App() {
   const [panelState, setPanelState] = useState(EMPTY_PANEL)
   const [input, setInput] = useState('')
   const [instructions, setInstructions] = useState('')
-  const [suggest, setSuggest] = useState({ status: '', items: [] })
   const [showStarters, setShowStarters] = useState(false)
   const [env, setEnv] = useState('dev')
-  const [selectedScenario, setSelectedScenario] = useState('')
-  const [scenariosPrepared, setScenariosPrepared] = useState(false)
-  const [scenarioLabel, setScenarioLabel] = useState('Auto — the pipeline picks one')
-  const [scenarioPicked, setScenarioPicked] = useState(false)
-  const [scenarioBtnLabel, setScenarioBtnLabel] = useState('Choose a scenario →')
   const [run, setRun] = useState({ visible: false, stages: [], result: null })
-  const [modal, setModal] = useState({
-    open: false,
-    mode: 'prep',
-    prepStages: [],
-    scenarioList: null,
-    errorMsg: '',
-  })
   const [printDate, setPrintDate] = useState('')
+
+  // wizard
+  const [wizardOpen, setWizardOpen] = useState(false)
+  const [wizardStep, setWizardStep] = useState('instructions') // 'instructions' | 'scenarios'
+  const [selectedServices, setSelectedServices] = useState(new Set(['auto']))
+  const [selectedShapes, setSelectedShapes] = useState(new Set())
+  const [scenarioStage, setScenarioStage] = useState(emptyScenarioStage())
+  const [pickedScenario, setPickedScenario] = useState('')
 
   // ---- refs (read inside async fetch / SSE callbacks) ----------------------
   const sessionIdRef = useRef(null)
@@ -47,7 +49,6 @@ export default function App() {
   const instructionsRef = useRef('')
   const selectedScenarioRef = useRef('')
   const scenariosPreparedRef = useRef(false)
-  const suggestLoadedForRef = useRef('')
   const runStagesRef = useRef([])
   const inputRef = useRef('')
   const activeStreamRef = useRef(null)
@@ -83,8 +84,7 @@ export default function App() {
   }
 
   // Persist the chat (minus the transient "thinking" bubble and the session
-  // divider — the divider is re-added fresh on each restore, so persisting it
-  // would make "— new session —" markers pile up on every reload).
+  // divider — the divider is re-added fresh on each restore).
   useEffect(() => {
     saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider'))
   }, [messages])
@@ -95,7 +95,7 @@ export default function App() {
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
-  // ---- brief panel + suggestions ------------------------------------------
+  // ---- brief panel ---------------------------------------------------------
   function updateBrief(data) {
     const ns = {
       brief: data.brief || {},
@@ -104,28 +104,6 @@ export default function App() {
     }
     panelStateRef.current = ns
     setPanelState(ns)
-    if (ns.ready && !generatingRef.current) loadSuggestions(ns)
-  }
-
-  async function loadSuggestions(ns) {
-    const b = ns.brief || {}
-    const names = (b.competencies || []).join(',')
-    const proficiency = b.proficiency || 'BASIC'
-    if (!names) return
-    const key = `${names}::${proficiency}`
-    if (key === suggestLoadedForRef.current) return
-    suggestLoadedForRef.current = key
-    setSuggest({ status: 'loading', items: [] })
-    try {
-      const res = await api(
-        `/api/suggest-instructions?names=${encodeURIComponent(names)}&proficiency=${encodeURIComponent(proficiency)}`
-      )
-      const data = await res.json()
-      setSuggest({ status: '', items: data.suggestions || [] })
-    } catch {
-      setSuggest({ status: '', items: [] })
-      suggestLoadedForRef.current = ''
-    }
   }
 
   // ---- conversation --------------------------------------------------------
@@ -286,28 +264,50 @@ export default function App() {
     }
   }
 
-  // ---- scenario modal ------------------------------------------------------
-  function showScenarioList(pool) {
-    setModal((prev) => ({ ...prev, mode: 'list', scenarioList: pool }))
-  }
-  function showScenarioError(msg) {
-    setModal((prev) => ({ ...prev, mode: 'error', errorMsg: msg }))
-  }
-  function setPrepStage(key, status) {
-    setModal((prev) => ({
-      ...prev,
-      prepStages: prev.prepStages.map((s) => (s.key === key ? { ...s, status } : s)),
-    }))
+  // ---- generate wizard -----------------------------------------------------
+  function composeInstructions() {
+    const parts = []
+    for (const c of SERVICE_CHIPS) if (selectedServices.has(c.id) && c.directive) parts.push(c.directive)
+    for (const c of SHAPE_CHIPS) if (selectedShapes.has(c.id) && c.directive) parts.push(c.directive)
+    const free = instructions.trim()
+    if (free) parts.push(free)
+    return parts.join('\n')
   }
 
-  function openScenarioModal() {
-    if (!sessionIdRef.current || !panelStateRef.current.ready) return
-    setModal({
-      open: true,
+  function openWizard() {
+    if (!sessionIdRef.current || !panelStateRef.current.ready || generatingRef.current) return
+    setWizardStep('instructions')
+    setWizardOpen(true)
+  }
+  function closeWizard() {
+    if (prepStreamRef.current) {
+      prepStreamRef.current.close()
+      prepStreamRef.current = null
+    }
+    setWizardOpen(false)
+  }
+  function toggleService(id) {
+    setSelectedServices((prev) => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+  function toggleShape(id) {
+    setSelectedShapes((prev) => {
+      const n = new Set(prev)
+      n.has(id) ? n.delete(id) : n.add(id)
+      return n
+    })
+  }
+
+  function onGenerateScenarios() {
+    setWizardStep('scenarios')
+    setScenarioStage({
       mode: 'prep',
       prepStages: PREP_STAGES.map(([key, label]) => ({ key, label, status: '' })),
-      scenarioList: null,
-      errorMsg: '',
+      list: [],
+      error: '',
     })
     const curEnv = envRef.current
     api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
@@ -316,8 +316,7 @@ export default function App() {
         const pool = (data && data.scenarios) || []
         if (pool.length) {
           scenariosPreparedRef.current = true
-          setScenariosPrepared(true)
-          showScenarioList(pool)
+          setScenarioStage((prev) => ({ ...prev, mode: 'list', list: pool }))
         } else {
           runPrepare(curEnv)
         }
@@ -326,7 +325,7 @@ export default function App() {
   }
 
   function runPrepare(curEnv) {
-    setModal((prev) => ({ ...prev, mode: 'prep' }))
+    setScenarioStage((prev) => ({ ...prev, mode: 'prep' }))
     api('/api/prepare', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -334,7 +333,9 @@ export default function App() {
     })
       .then((r) => r.json())
       .then((data) => streamPrepare(data.run_id, curEnv))
-      .catch(() => showScenarioError('Could not start scenario preparation.'))
+      .catch(() =>
+        setScenarioStage((prev) => ({ ...prev, mode: 'error', error: 'Could not start scenario preparation.' }))
+      )
   }
 
   function streamPrepare(runId, curEnv) {
@@ -347,19 +348,29 @@ export default function App() {
         prepStreamRef.current = null
         if (e.status === 'completed') {
           scenariosPreparedRef.current = true
-          setScenariosPrepared(true)
           api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
             .then((r) => r.json())
-            .then((data) => showScenarioList((data && data.scenarios) || []))
-            .catch(() => showScenarioError('Scenarios were generated but could not be loaded.'))
+            .then((data) =>
+              setScenarioStage((prev) => ({ ...prev, mode: 'list', list: (data && data.scenarios) || [] }))
+            )
+            .catch(() =>
+              setScenarioStage((prev) => ({
+                ...prev,
+                mode: 'error',
+                error: 'Scenarios were generated but could not be loaded.',
+              }))
+            )
         } else {
-          showScenarioError(e.detail || 'Scenario preparation failed.')
+          setScenarioStage((prev) => ({ ...prev, mode: 'error', error: e.detail || 'Scenario preparation failed.' }))
         }
         return
       }
       if (PREPARED_STAGES.includes(e.stage)) {
         const status = e.status === 'ok' ? 'ok' : e.status === 'failed' ? 'failed' : 'running'
-        setPrepStage(e.stage, status)
+        setScenarioStage((prev) => ({
+          ...prev,
+          prepStages: prev.prepStages.map((s) => (s.key === e.stage ? { ...s, status } : s)),
+        }))
       }
     }
     es.onerror = () => {
@@ -368,31 +379,11 @@ export default function App() {
     }
   }
 
-  function closeScenarioModal() {
-    if (prepStreamRef.current) {
-      prepStreamRef.current.close()
-      prepStreamRef.current = null
-    }
-    setModal((prev) => ({ ...prev, open: false }))
-  }
-
-  function pickScenario(text, num) {
-    selectedScenarioRef.current = text
-    setSelectedScenario(text)
-    setScenarioLabel(`Scenario ${num} selected`)
-    setScenarioPicked(true)
-    setScenarioBtnLabel('Change scenario →')
-    closeScenarioModal()
-  }
-
-  function clearScenarioSelection() {
-    selectedScenarioRef.current = ''
-    setSelectedScenario('')
-    scenariosPreparedRef.current = false
-    setScenariosPrepared(false)
-    setScenarioLabel('Auto — the pipeline picks one')
-    setScenarioPicked(false)
-    setScenarioBtnLabel('Choose a scenario →')
+  function onBuildTask() {
+    instructionsRef.current = composeInstructions()
+    selectedScenarioRef.current = pickedScenario
+    closeWizard()
+    startGeneration()
   }
 
   // ---- header actions ------------------------------------------------------
@@ -413,9 +404,14 @@ export default function App() {
     runStagesRef.current = []
     setInstructions('')
     instructionsRef.current = ''
-    setSuggest({ status: '', items: [] })
-    suggestLoadedForRef.current = ''
-    clearScenarioSelection()
+    // reset wizard
+    closeWizard()
+    setSelectedServices(new Set(['auto']))
+    setSelectedShapes(new Set())
+    setPickedScenario('')
+    setScenarioStage(emptyScenarioStage())
+    selectedScenarioRef.current = ''
+    scenariosPreparedRef.current = false
     panelStateRef.current = EMPTY_PANEL
     setPanelState(EMPTY_PANEL)
     setShowStarters(true)
@@ -445,10 +441,6 @@ export default function App() {
     setInput(v)
     inputRef.current = v
   }
-  function onInstructionsChange(v) {
-    setInstructions(v)
-    instructionsRef.current = v
-  }
   function onEnvChange(v) {
     setEnv(v)
     envRef.current = v
@@ -458,15 +450,6 @@ export default function App() {
     setInput(v)
     inputRef.current = v
     if (inputElRef.current) inputElRef.current.focus()
-  }
-  function onSuggestClick(text) {
-    setInstructions((cur) => {
-      const next = cur.trim() ? `${cur}\n${text}` : text
-      instructionsRef.current = next
-      return next
-    })
-    const el = document.getElementById('instructions')
-    if (el) el.focus()
   }
 
   // ---- one-time init: restore transcript, then start a fresh session -------
@@ -492,9 +475,14 @@ export default function App() {
   const genHint = generating
     ? 'Generation in progress — logs stream in the chat.'
     : panelState.ready
-      ? 'Add optional instructions, pick a scenario if you like, then generate.'
+      ? 'Click Generate — add optional instructions, pick a scenario, then build.'
       : 'Answer the questions in the chat — the brief fills in here as you go.'
   const genDisabled = !(panelState.ready && sessionId && !generating)
+
+  const brief = panelState.brief || {}
+  const wizardSubtitle = [(brief.competencies || []).join(', '), brief.role]
+    .filter(Boolean)
+    .join(' · ')
 
   return (
     <>
@@ -545,32 +533,32 @@ export default function App() {
           generating={generating}
           genDisabled={genDisabled}
           onSlotClick={onSlotClick}
-          instructions={instructions}
-          onInstructionsChange={onInstructionsChange}
-          suggest={suggest}
-          onSuggestClick={onSuggestClick}
-          scenarioLabel={scenarioLabel}
-          scenarioPicked={scenarioPicked}
-          scenarioBtnLabel={scenarioBtnLabel}
-          onChooseScenario={openScenarioModal}
           env={env}
           onEnvChange={onEnvChange}
           envDisabled={generating}
-          onGenerate={startGeneration}
+          onGenerate={openWizard}
           genHint={genHint}
           run={run}
         />
       </div>
 
-      <ScenarioModal
-        open={modal.open}
-        mode={modal.mode}
-        prepStages={modal.prepStages}
-        scenarioList={modal.scenarioList}
-        selectedScenario={selectedScenario}
-        errorMsg={modal.errorMsg}
-        onClose={closeScenarioModal}
-        onPick={pickScenario}
+      <GenerateWizard
+        open={wizardOpen}
+        step={wizardStep}
+        subtitle={wizardSubtitle}
+        selectedServices={selectedServices}
+        onToggleService={toggleService}
+        selectedShapes={selectedShapes}
+        onToggleShape={toggleShape}
+        instructions={instructions}
+        onInstructionsChange={setInstructions}
+        onGenerateScenarios={onGenerateScenarios}
+        onBack={() => setWizardStep('instructions')}
+        scenarioStage={scenarioStage}
+        pickedScenario={pickedScenario}
+        onPickScenario={setPickedScenario}
+        onBuildTask={onBuildTask}
+        onClose={closeWizard}
       />
     </>
   )

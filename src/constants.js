@@ -26,6 +26,26 @@ export const PREP_STAGES = [
   ['02_scenarios', 'Scenarios'],
 ]
 
+// Step 1 of the generate wizard — "Suggested instructions". Each selected chip
+// appends its `directive` to the free-text instructions sent to the pipeline.
+// `auto` contributes nothing (let the pipeline choose).
+export const SERVICE_CHIPS = [
+  { id: 'auto', label: 'Auto — pick a fitting service', directive: '' },
+  { id: 'vectordb', label: 'Vector DB (pgvector / Qdrant)', directive: 'Require a vector database (pgvector or Qdrant) as a dependency.' },
+  { id: 'redis', label: 'Redis (cache / idempotency)', directive: 'Require a Redis dependency for caching / idempotency.' },
+  { id: 'kafka', label: 'Kafka (event-driven)', directive: 'Make it event-driven with a Kafka dependency.' },
+  { id: 'postgres', label: 'PostgreSQL (relational)', directive: 'Require a PostgreSQL relational database.' },
+  { id: 'mcp', label: 'MCP / tool server', directive: 'Require an MCP / tool-server component.' },
+]
+
+// "Task shape & focus" — orthogonal directives that shape the task.
+export const SHAPE_CHIPS = [
+  { id: 'debug', label: 'Make it a debugging task', directive: 'Make it a debugging task — the candidate fixes existing broken code.' },
+  { id: 'greenfield', label: 'Greenfield build', directive: 'Make it a greenfield build — the candidate implements from scratch.' },
+  { id: 'perf', label: 'Add a performance constraint', directive: 'Add a performance constraint the solution must satisfy.' },
+  { id: 'tests', label: 'Require unit tests', directive: 'Require the candidate to write unit tests.' },
+]
+
 export const STARTERS = [
   'An INTERMEDIATE React + TypeScript task for a frontend engineer, focused on state management, e-commerce domain',
   'A BASIC Java + Kafka task for a backend engineer, focused on consumer groups, logistics domain',
