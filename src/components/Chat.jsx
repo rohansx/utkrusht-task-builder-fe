@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react'
-import BriefCard from './BriefCard.jsx'
+import Markdown from './Markdown.jsx'
 
 // Chat message renderers. `messages` is the source of truth; each item has a
 // `kind` (bubble | divider | stage | done | brief). Mirrors the DOM the static
@@ -108,17 +108,21 @@ export default function Chat({ messages, briefUi }) {
         }
         if (m.kind === 'stage') return <StageLog m={m} key={m.id} />
         if (m.kind === 'done') return <DoneCard m={m} key={m.id} />
-        if (m.kind === 'brief') {
-          return (
-            <Row role="bot" cls="summary brief-card" key={m.id}>
-              <BriefCard m={m} ui={briefUi} />
-            </Row>
-          )
-        }
-        // bubble
+        // bubble — animated dots while pending; bot replies render markdown,
+        // user messages stay literal (don't parse the user's own text).
         return (
           <Row role={m.role} cls={m.cls} key={m.id}>
-            {m.text}
+            {m.pending ? (
+              <span className="thinking" aria-label="thinking">
+                <span />
+                <span />
+                <span />
+              </span>
+            ) : m.role === 'bot' ? (
+              <Markdown text={m.text} />
+            ) : (
+              m.text
+            )}
           </Row>
         )
       })}

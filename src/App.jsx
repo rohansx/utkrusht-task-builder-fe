@@ -8,6 +8,7 @@ import {
   STARTERS,
   SERVICE_CHIPS,
   SHAPE_CHIPS,
+  SLOT_DEFS,
 } from './constants.js'
 import Header from './components/Header.jsx'
 import Chat from './components/Chat.jsx'
@@ -16,6 +17,19 @@ import GenerateWizard from './components/GenerateWizard.jsx'
 const EMPTY_PANEL = { brief: {}, missing: [], ready: false }
 const PREPARED_STAGES = ['00_preflight', '01_input_files', '02_scenarios']
 const emptyScenarioStage = () => ({ mode: 'prep', prepStages: [], list: [], error: '' })
+
+// The brief is generation-ready once every REQUIRED slot is filled — this is
+// exactly what the backend's /api/generate gates on (brief.is_complete()). We
+// deliberately do NOT wait for the bot's `ready` confirmation flag: it stays
+// false until the user says "yes, confirm" in chat, which would otherwise
+// leave the Generate button disabled on a fully-filled brief.
+function isBriefComplete(brief) {
+  if (!brief) return false
+  return SLOT_DEFS.filter((d) => d.required).every((d) => {
+    const v = brief[d.key]
+    return d.list ? Array.isArray(v) && v.length > 0 : v != null && String(v).trim() !== ''
+  })
+}
 
 export default function App() {
   // ---- render state --------------------------------------------------------
@@ -35,6 +49,7 @@ export default function App() {
   const [selectedServices, setSelectedServices] = useState(new Set(['auto']))
   const [selectedShapes, setSelectedShapes] = useState(new Set())
   const [scenarioStage, setScenarioStage] = useState(emptyScenarioStage())
+  const [buildStage, setBuildStage] = useState({ stages: [], status: 'running', result: null, error: '' })
   const [pickedScenario, setPickedScenario] = useState('')
 
   // ---- refs (read inside async fetch / SSE callbacks) ----------------------
@@ -49,6 +64,8 @@ export default function App() {
   const inputRef = useRef('')
   const activeStreamRef = useRef(null)
   const prepStreamRef = useRef(null)
+  const prepTimerRef = useRef(null)
+  const buildTimerRef = useRef(null)
   const inputElRef = useRef(null)
   const mainRef = useRef(null)
   const initRef = useRef(false)
@@ -87,20 +104,24 @@ export default function App() {
   }, [messages])
 
   // Keep the chat scrolled to the newest message. `main` is the scroll
-  // container (the .chat div inside it just stacks the messages), and the
-  // rAF waits one frame so freshly-added cards have their final height
-  // before we jump to the bottom.
+  // container (overflow-y:auto) — not `.chat`, which is a flex:1 child — so
+  // scroll the parent, else new replies never scroll into view.
   useEffect(() => {
-    const el = mainRef.current
-    if (!el) return
-    requestAnimationFrame(() => {
-      el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' })
-    })
+    const el = chatRef.current?.parentElement
+    if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
-  // ---- brief card (inline in the chat) --------------------------------------
-  // Keeps a single brief card in the stream: drop the previous one and append
-  // a fresh card after the reply, so it always sits under the latest exchange.
+  // The inline generate wizard renders at the TOP of `main`. After a brief is
+  // filled `main` is scrolled to the bottom, so opening the wizard would leave
+  // it off-screen above the fold — the click "does nothing" from the user's
+  // view. Scroll it into view whenever it opens.
+  useEffect(() => {
+    if (!wizardOpen) return
+    const w = chatRef.current?.parentElement?.querySelector('.wizard-inline')
+    if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }, [wizardOpen])
+
+  // ---- brief panel ---------------------------------------------------------
   function updateBrief(data) {
     const ns = {
       brief: data.brief || {},
@@ -160,7 +181,8 @@ export default function App() {
 
   // ---- generation ----------------------------------------------------------
   function startGeneration() {
-    if (generatingRef.current || !panelStateRef.current.ready || !sessionIdRef.current) return
+    if (generatingRef.current || !isBriefComplete(panelStateRef.current.brief) || !sessionIdRef.current)
+      return
     const curEnv = envRef.current
     const instr = (instructionsRef.current || '').trim()
     generatingRef.current = true
@@ -255,7 +277,8 @@ export default function App() {
   }
 
   function openWizard() {
-    if (!sessionIdRef.current || !panelStateRef.current.ready || generatingRef.current) return
+    if (!sessionIdRef.current || !isBriefComplete(panelStateRef.current.brief) || generatingRef.current)
+      return
     setWizardStep('instructions')
     setWizardOpen(true)
   }
@@ -264,6 +287,10 @@ export default function App() {
       prepStreamRef.current.close()
       prepStreamRef.current = null
     }
+    clearTimeout(prepTimerRef.current)
+    clearTimeout(buildTimerRef.current)
+    generatingRef.current = false
+    setGenerating(false)
     setWizardOpen(false)
   }
   function toggleService(id) {
@@ -285,7 +312,7 @@ export default function App() {
     setWizardStep('scenarios')
     setScenarioStage({
       mode: 'prep',
-      prepStages: PREP_STAGES.map(([key, label]) => ({ key, label, status: '' })),
+      prepStages: PREP_STAGES.map(([key, label]) => ({ key, label, status: 'pending', log: '' })),
       list: [],
       error: '',
     })
@@ -312,58 +339,152 @@ export default function App() {
       body: JSON.stringify({ session_id: sessionIdRef.current, env: curEnv }),
     })
       .then((r) => r.json())
-      .then((data) => streamPrepare(data.run_id, curEnv))
+      .then((data) => pollPrep(data.run_id, curEnv))
       .catch(() =>
         setScenarioStage((prev) => ({ ...prev, mode: 'error', error: 'Could not start scenario preparation.' }))
       )
   }
 
-  function streamPrepare(runId, curEnv) {
-    const es = new EventSource(eventsUrl(`/api/runs/${runId}/events`))
-    prepStreamRef.current = es
-    es.onmessage = (ev) => {
-      const e = JSON.parse(ev.data)
-      if (e.stage === 'done') {
-        es.close()
-        prepStreamRef.current = null
-        if (e.status === 'completed') {
-          scenariosPreparedRef.current = true
-          api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
-            .then((r) => r.json())
-            .then((data) =>
-              setScenarioStage((prev) => ({ ...prev, mode: 'list', list: (data && data.scenarios) || [] }))
-            )
-            .catch(() =>
-              setScenarioStage((prev) => ({
-                ...prev,
-                mode: 'error',
-                error: 'Scenarios were generated but could not be loaded.',
-              }))
-            )
-        } else {
-          setScenarioStage((prev) => ({ ...prev, mode: 'error', error: e.detail || 'Scenario preparation failed.' }))
-        }
-        return
-      }
-      if (PREPARED_STAGES.includes(e.stage)) {
-        const status = e.status === 'ok' ? 'ok' : e.status === 'failed' ? 'failed' : 'running'
-        setScenarioStage((prev) => ({
-          ...prev,
-          prepStages: prev.prepStages.map((s) => (s.key === e.stage ? { ...s, status } : s)),
-        }))
-      }
+  // Poll the run state (not SSE) so we can show each stage's LIVE LOG tail —
+  // you watch input files being generated, right in the panel.
+  function pollPrep(jobId, curEnv) {
+    clearTimeout(prepTimerRef.current)
+    const tick = () => {
+      api(`/api/runs/${jobId}/state?env=${curEnv}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const byLabel = {}
+          for (const s of data.stages || []) byLabel[s.label] = s
+          const prep = PREP_STAGES.map(([key, label]) => {
+            const s = byLabel[key] || {}
+            return { key, label, status: s.status || 'pending', log: s.log || '' }
+          })
+          setScenarioStage((prev) => ({ ...prev, prepStages: prep }))
+          const st = data.status
+          if (st === 'done') {
+            scenariosPreparedRef.current = true
+            api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
+              .then((r) => r.json())
+              .then((d) => setScenarioStage((prev) => ({ ...prev, mode: 'list', list: (d && d.scenarios) || [] })))
+              .catch(() =>
+                setScenarioStage((prev) => ({
+                  ...prev,
+                  mode: 'error',
+                  error: 'Scenarios were generated but could not be loaded.',
+                }))
+              )
+            return
+          }
+          if (st === 'failed' || st === 'cancelled') {
+            setScenarioStage((prev) => ({ ...prev, mode: 'error', error: data.error || 'Scenario preparation failed.' }))
+            return
+          }
+          prepTimerRef.current = setTimeout(tick, 1500)
+        })
+        .catch(() => {
+          prepTimerRef.current = setTimeout(tick, 2500)
+        })
     }
-    es.onerror = () => {
-      es.close()
-      prepStreamRef.current = null
-    }
+    tick()
   }
 
   function onBuildTask() {
-    instructionsRef.current = composeInstructions()
+    if (generatingRef.current || !isBriefComplete(panelStateRef.current.brief) || !sessionIdRef.current)
+      return
+    const curEnv = envRef.current
+    const instr = composeInstructions()
+    instructionsRef.current = instr
     selectedScenarioRef.current = pickedScenario
+    generatingRef.current = true
+    setGenerating(true)
+    setWizardStep('building')
+    setBuildStage({
+      stages: PIPELINE_STAGES.map(([key, label]) => ({
+        key,
+        label,
+        status: scenariosPreparedRef.current && PREPARED_STAGES.includes(key) ? 'ok' : 'pending',
+        log: '',
+      })),
+      status: 'running',
+      result: null,
+      error: '',
+    })
+    api('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionIdRef.current,
+        env: curEnv,
+        instructions: instr,
+        selected_scenario: selectedScenarioRef.current,
+        scenarios_prepared: scenariosPreparedRef.current,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => pollBuild(data.run_id, curEnv))
+      .catch(() => {
+        generatingRef.current = false
+        setGenerating(false)
+        setBuildStage((prev) => ({ ...prev, status: 'failed', error: 'Could not start generation.' }))
+      })
+  }
+
+  // Poll the generation job so ALL five stages + their logs show live in the
+  // wizard — same view the prep step uses, so the pipeline doesn't vanish
+  // after Build.
+  function pollBuild(jobId, curEnv) {
+    clearTimeout(buildTimerRef.current)
+    const tick = () => {
+      api(`/api/runs/${jobId}/state?env=${curEnv}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const byLabel = {}
+          for (const s of data.stages || []) byLabel[s.label] = s
+          const stages = PIPELINE_STAGES.map(([key, label]) => {
+            const s = byLabel[key] || {}
+            return { key, label, status: s.status || 'pending', log: s.log || '' }
+          })
+          setBuildStage((prev) => ({ ...prev, stages }))
+          const st = data.status
+          if (st === 'done') {
+            generatingRef.current = false
+            setGenerating(false)
+            setBuildStage((prev) => ({ ...prev, status: 'done', result: { task_id: data.result_task_id } }))
+            return
+          }
+          if (st === 'failed' || st === 'cancelled') {
+            generatingRef.current = false
+            setGenerating(false)
+            setBuildStage((prev) => ({ ...prev, status: 'failed', error: data.error || 'Generation failed.' }))
+            return
+          }
+          buildTimerRef.current = setTimeout(tick, 1500)
+        })
+        .catch(() => {
+          buildTimerRef.current = setTimeout(tick, 2500)
+        })
+    }
+    tick()
+  }
+
+  // Record the outcome in the chat transcript, then close the wizard.
+  function finishBuild() {
+    if (buildStage.status === 'done') {
+      addDone({
+        status: 'completed',
+        task_id: buildStage.result?.task_id || '',
+        task_name: '',
+        task_type: '',
+        competencies: '',
+        env: envRef.current,
+        task_url: '',
+        outcome: '',
+        detail: '',
+      })
+    } else if (buildStage.status === 'failed') {
+      addBubble('bot', buildStage.error || 'Generation failed.', 'stage failed')
+    }
     closeWizard()
-    startGeneration()
   }
 
   // ---- header actions ------------------------------------------------------
@@ -452,10 +573,10 @@ export default function App() {
 
   const genHint = generating
     ? 'Generation in progress — logs stream in the chat.'
-    : panelState.ready
+    : isBriefComplete(panelState.brief)
       ? 'Click Generate — add optional instructions, pick a scenario, then build.'
-      : 'Keep answering the questions — the brief updates as you go.'
-  const genDisabled = !(panelState.ready && sessionId && !generating)
+      : 'Answer the questions in the chat — the brief fills in here as you go.'
+  const genDisabled = !(isBriefComplete(panelState.brief) && sessionId && !generating)
 
   const briefUi = {
     generating,
@@ -485,7 +606,7 @@ export default function App() {
             <Chat messages={messages} briefUi={briefUi} />
           </div>
 
-          {showStarters && (
+          {showStarters && !wizardOpen && (
             <div className="starters">
               <div className="starters-label">Try one of these to get going:</div>
               <div className="starters-row">
@@ -498,43 +619,51 @@ export default function App() {
             </div>
           )}
 
-          <div className="dock">
-            <div className="dock-inner">
-              <input
-                type="text"
-                ref={inputElRef}
-                value={input}
-                placeholder="Type a message…"
-                autoComplete="off"
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') send()
-                }}
-              />
-              <button onClick={send}>Send</button>
+          {/* The wizard renders BELOW the conversation so it appears down the
+              page (where the user clicked Generate), not at the top. */}
+          <GenerateWizard
+            open={wizardOpen}
+            step={wizardStep}
+            subtitle={wizardSubtitle}
+            selectedServices={selectedServices}
+            onToggleService={toggleService}
+            selectedShapes={selectedShapes}
+            onToggleShape={toggleShape}
+            instructions={instructions}
+            onInstructionsChange={setInstructions}
+            onGenerateScenarios={onGenerateScenarios}
+            onBack={() => setWizardStep('instructions')}
+            scenarioStage={scenarioStage}
+            pickedScenario={pickedScenario}
+            onPickScenario={setPickedScenario}
+            onBuildTask={onBuildTask}
+            buildStage={buildStage}
+            onBuildDone={finishBuild}
+            onClose={closeWizard}
+          />
+
+          {/* Hide the chat input while the wizard is open — no typing during
+              generate-setup, and it keeps the sticky dock from overlapping. */}
+          {!wizardOpen && (
+            <div className="dock">
+              <div className="dock-inner">
+                <input
+                  type="text"
+                  ref={inputElRef}
+                  value={input}
+                  placeholder="Type a message…"
+                  autoComplete="off"
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') send()
+                  }}
+                />
+                <button onClick={send}>Send</button>
+              </div>
             </div>
-          </div>
+          )}
         </main>
       </div>
-
-      <GenerateWizard
-        open={wizardOpen}
-        step={wizardStep}
-        subtitle={wizardSubtitle}
-        selectedServices={selectedServices}
-        onToggleService={toggleService}
-        selectedShapes={selectedShapes}
-        onToggleShape={toggleShape}
-        instructions={instructions}
-        onInstructionsChange={setInstructions}
-        onGenerateScenarios={onGenerateScenarios}
-        onBack={() => setWizardStep('instructions')}
-        scenarioStage={scenarioStage}
-        pickedScenario={pickedScenario}
-        onPickScenario={setPickedScenario}
-        onBuildTask={onBuildTask}
-        onClose={closeWizard}
-      />
     </>
   )
 }
