@@ -90,9 +90,11 @@ export default function App() {
     saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider'))
   }, [messages])
 
-  // Keep the chat scrolled to the newest message.
+  // Keep the chat scrolled to the newest message. `main` is the scroll
+  // container (overflow-y:auto) — not `.chat`, which is a flex:1 child — so
+  // scroll the parent, else new replies never scroll into view.
   useEffect(() => {
-    const el = chatRef.current
+    const el = chatRef.current?.parentElement
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
