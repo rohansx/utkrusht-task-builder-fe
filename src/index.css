@@ -1,22 +1,22 @@
 /* Task Builder — utkrusht.ai brand system.
-   Tokens sourced from Utkrushta/docs/_assets/utkrusht-brand-system.html:
-   Inter, green ink #0e6b3c (buttons, logo mark, left-border accents, one
-   shimmer phrase), page bg #f7f8fa, cards always #ffffff with 0.5px #e0e5ed
-   hairlines, radius 12px. Serif wordmark per the brand rule. */
+   Tokens sourced from Utkrushta/recruiter-utkrusht (src/app/primitives.css +
+   globals.css semantic mapping): Inter (sans) + DM Mono (logs), primary green
+   Brand/600 #1a7b48, warm-gray Stone neutrals (bg Gray warm/200, border
+   Gray warm/300, text Gray warm/900), cards always #ffffff, radius 12px. */
 :root {
-  --uk-green:       #0e6b3c;
-  --uk-green-deep:  #0a4a29;
-  --uk-green-mid:   #1a8a50;
-  --uk-green-light: #2aad65;
-  --bg:             #f7f8fa;
-  --card:           #ffffff;
-  --border:         #e0e5ed;
-  --text:           #111111;
-  --muted:          #556677;
-  --faint:          #8fa3be;
-  --green-tint:     #e6f2ec;
-  --amber-text:     #92400e;
-  --amber-tint:     #fff8e6;
+  --uk-green:       #1a7b48;  /* Primary/Brand/600 — --primary */
+  --uk-green-deep:  #15623a;  /* Primary/Brand/700 — hover      */
+  --uk-green-mid:   #48956d;  /* Primary/Brand/500              */
+  --uk-green-light: #76b091;  /* Primary/Brand/400              */
+  --bg:             #e7e5e4;  /* Gray warm/200 — --background   */
+  --card:           #ffffff;  /* Base/White — --card            */
+  --border:         #d7d3d0;  /* Gray warm/300 — --border       */
+  --text:           #1c1917;  /* Gray warm/900 — --foreground   */
+  --muted:          #57534e;  /* Gray warm/600 — --muted-fg     */
+  --faint:          #a9a29d;  /* Gray warm/400                  */
+  --green-tint:     #ddebe4;  /* Primary/Brand/50               */
+  --amber-text:     #b54708;  /* Warning/700                    */
+  --amber-tint:     #fffaeb;  /* Warning/50                     */
   --radius:         12px;
   --card-shadow:    0 1px 3px rgba(16,24,40,0.04);
 }
@@ -53,11 +53,7 @@ header {
   background:var(--card);
   display:flex; align-items:center; gap:10px;
 }
-.logo { width:28px; height:28px; display:block; }
-.wordmark {
-  font-family:Georgia,"Times New Roman",serif;
-  font-size:18px; color:var(--uk-green-deep); letter-spacing:-0.01em;
-}
+.logo { height:24px; width:auto; display:block; }
 .header-sep { width:1px; height:20px; background:var(--border); margin:0 2px; }
 header h1 {
   font-size:16px; margin:0; font-weight:700; letter-spacing:-0.02em;
@@ -65,7 +61,7 @@ header h1 {
 
 /* The one shimmer phrase per page — brand signature. */
 .shimmer {
-  background:linear-gradient(90deg,#0a4a29 0%,#0e6b3c 30%,#2aad65 55%,#0a4a29 85%);
+  background:linear-gradient(90deg,#114e2e 0%,#1a7b48 30%,#76b091 55%,#114e2e 85%);
   background-size:200% auto;
   -webkit-background-clip:text; background-clip:text;
   -webkit-text-fill-color:transparent;
@@ -84,35 +80,18 @@ header h1 {
 }
 .hbtn:hover { background:var(--green-tint); }
 
-/* ---- two-pane layout ----------------------------------------------------- */
+/* ---- single-column layout -------------------------------------------------- */
 .layout {
   flex:1; min-height:0;
-  display:grid; grid-template-columns:minmax(0,1fr) 320px;
-  gap:0;
-  width:min(1120px,100vw); margin:0 auto;
+  display:grid; grid-template-columns:minmax(0,1fr);
+  width:min(880px,100vw); margin:0 auto;
 }
 main { min-height:0; overflow-y:auto; padding:26px 24px 0;
   display:flex; flex-direction:column; align-items:center; }
 .chat { width:100%; max-width:680px; display:flex; flex-direction:column;
   gap:12px; flex:1; }
 
-/* ---- brief panel (right) -------------------------------------------------- */
-.brief-panel {
-  min-height:0; overflow-y:auto;
-  padding:26px 22px 150px 6px;
-  display:flex; flex-direction:column; gap:14px;
-}
-.panel-section {
-  background:var(--card); border:0.5px solid var(--border);
-  border-left:2.5px solid var(--uk-green);
-  border-radius:0 var(--radius) var(--radius) 0;
-  padding:14px 16px;
-  box-shadow:var(--card-shadow);
-}
-.panel-title {
-  font-size:11px; font-weight:600; letter-spacing:0.1em;
-  text-transform:uppercase; color:var(--uk-green); margin-bottom:10px;
-}
+/* ---- inline task-brief card (lives in the chat stream) --------------------- */
 .progress-track {
   height:4px; border-radius:2px; background:var(--bg); overflow:hidden;
 }
@@ -142,12 +121,25 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 }
 .slots li.filled { cursor:pointer; }
 .slots li.filled:hover { background:var(--bg); }
-
-.panel-generate { display:flex; flex-direction:column; gap:10px; }
-.panel-review { display:flex; flex-direction:column; gap:12px; }
-.panel-review .cta { margin-top:0; width:100%; }
-.panel-review .env-pick { justify-content:space-between; }
 .gen-hint { font-size:12px; color:var(--faint); line-height:1.5; }
+
+/* The brief card is a full-width bot card; slots flow in two columns. */
+.bot .bubble.brief-card { max-width:100%; width:100%; white-space:normal; }
+.brief-card .progress-track { margin-bottom:6px; }
+.brief-card .slots {
+  display:grid; grid-template-columns:1fr 1fr; gap:0 22px;
+}
+.brief-card .slots li { border-top:0.5px solid var(--border); }
+.brief-card .slots li:nth-child(-n+2) { border-top:0; }
+.brief-card .actions {
+  margin-top:12px; padding-top:12px; border-top:0.5px solid var(--border);
+  display:flex; align-items:center; justify-content:space-between; gap:12px;
+}
+.brief-card .gen-hint { margin-top:8px; }
+@media (max-width: 560px) {
+  .brief-card .slots { grid-template-columns:1fr; }
+  .brief-card .slots li:nth-child(2) { border-top:0.5px solid var(--border); }
+}
 
 /* ---- review step: instructions + scenario --------------------------------- */
 .review-field { display:flex; flex-direction:column; gap:7px; }
@@ -166,7 +158,7 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 .suggest-chip { background:var(--green-tint); color:var(--uk-green-deep);
   border:0.5px solid var(--border); border-radius:999px; padding:4px 10px;
   font:inherit; font-size:12px; cursor:pointer; text-align:left; line-height:1.35; }
-.suggest-chip:hover { border-color:var(--uk-green); background:#dcecdf; }
+.suggest-chip:hover { border-color:var(--uk-green); background:#c5ded1; }
 .suggest-status { font-size:11px; color:var(--faint); }
 
 .scenario-state { display:flex; flex-direction:column; gap:4px; }
@@ -206,7 +198,7 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 .scenario-card .sc-sec b { color:var(--uk-green-deep); font-weight:600; }
 .scenario-empty { font-size:13px; color:var(--muted); line-height:1.6; }
 
-/* Pipeline checklist inside the panel */
+/* Pipeline checklist inside the generate wizard */
 .run-stages { list-style:none; margin:0; padding:0;
   display:flex; flex-direction:column; gap:7px; }
 .run-stages li { display:flex; align-items:center; gap:9px; font-size:13px;
@@ -230,20 +222,16 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
   color:var(--amber-text);
 }
 .run-stages .secs { margin-left:auto; font-size:11px; color:var(--faint); }
-@keyframes pulse { 50% { box-shadow:0 0 0 4px rgba(14,107,60,0.12); } }
-
-.run-result { margin-top:12px; padding-top:10px;
-  border-top:0.5px solid var(--border); font-size:13px; line-height:1.6; }
-.run-result a { color:var(--uk-green); text-decoration:underline;
-  word-break:break-all; }
+@keyframes pulse { 50% { box-shadow:0 0 0 4px rgba(26,123,72,0.12); } }
 
 /* ---- chat bubbles ---------------------------------------------------------- */
 .row { display:flex; gap:10px; align-items:flex-end; }
 .row.user { justify-content:flex-end; }
 .avatar { width:28px; height:28px; border-radius:50%; display:grid;
   place-items:center; font-size:12px; font-weight:700; flex-shrink:0; }
-.avatar.bot { background:var(--green-tint); color:var(--uk-green-deep);
-  border:0.5px solid var(--border); }
+.avatar.bot { background:#fff; border:0.5px solid var(--border);
+  overflow:hidden; }
+.avatar.bot img { width:100%; height:100%; display:block; object-fit:cover; }
 .avatar.user { background:var(--uk-green); color:#fff; }
 .bubble { max-width:78%; padding:11px 14px; border-radius:14px;
   white-space:pre-wrap; word-wrap:break-word; }
@@ -310,20 +298,20 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 .stage-log details[open] summary::before { content:"\25BE"; }
 .stage-log pre.log { margin:0; padding:11px 13px; max-height:240px;
   overflow:auto; background:var(--bg); border-top:0.5px solid var(--border);
-  font:12px/1.5 "SF Mono","Fira Code","JetBrains Mono",ui-monospace,
-    SFMono-Regular,Menlo,Consolas,monospace;
-  color:#3d4c5e; white-space:pre-wrap; word-break:break-word; }
+  font:12px/1.5 "DM Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color:var(--muted); white-space:pre-wrap; word-break:break-word; }
 .stage-log pre.log:empty { display:none; }
 
 /* ---- starter suggestion chips --------------------------------------------- */
+/* Starter suggestions — above the input dock; every chip the same width. */
 .starters { width:100%; max-width:680px; margin-top:18px; }
 .starters-label { font-size:12px; color:var(--faint); margin-bottom:8px; }
-.starters-row { display:flex; flex-wrap:wrap; gap:8px; }
+.starters-row { display:flex; flex-direction:column; gap:8px; }
 .chip {
-  background:var(--card); border:0.5px solid var(--border);
-  border-radius:999px; padding:7px 14px; font:inherit; font-size:13px;
-  color:var(--muted); cursor:pointer; box-shadow:var(--card-shadow);
-  text-align:left;
+  width:100%; background:var(--card); border:0.5px solid var(--border);
+  border-radius:12px; padding:9px 14px; font:inherit; font-size:13px;
+  line-height:1.5; color:var(--muted); cursor:pointer;
+  box-shadow:var(--card-shadow); text-align:left;
 }
 .chip:hover { border-color:var(--uk-green); color:var(--uk-green-deep);
   background:var(--green-tint); }
@@ -356,12 +344,6 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
   opacity:.35;
 }
 
-/* ---- responsive: stack the panel under the chat on narrow screens --------- */
-@media (max-width: 900px) {
-  .layout { display:flex; flex-direction:column; overflow-y:auto; }
-  main { overflow-y:visible; }
-  .brief-panel { overflow-y:visible; padding:0 24px 40px; }
-}
 
 /* Print-only document header — hidden on screen, shown when printing. */
 .print-head { display:none; }
@@ -370,7 +352,7 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
    window.print(). Hides chrome, lets content flow across pages, and forces
    every stage-log panel fully open so the logs print. */
 @media print {
-  header, .dock, .brief-panel, .starters, .modal-overlay { display:none !important; }
+  header, .dock, .starters, .modal-overlay { display:none !important; }
   body { overflow:visible; height:auto; background:#fff; }
   .layout { display:block; width:100%; }
   main { overflow:visible; padding:0; display:block; }
@@ -387,7 +369,7 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 }
 
 /* ---- generate wizard (centered human-in-the-loop) ---------------------- */
-.modal.wizard { max-width:660px; width:calc(100% - 32px); border:1px solid #cfe6d8; }
+.modal.wizard { max-width:660px; width:calc(100% - 32px); border:1px solid #c5ded1; }
 .wizard-step { display:flex; flex-direction:column; gap:18px; }
 .wz-sub { font-size:13px; color:var(--muted); line-height:1.55; }
 .wz-sub b { color:var(--uk-green-deep); font-weight:600; }

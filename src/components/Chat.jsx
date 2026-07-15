@@ -2,11 +2,15 @@ import { useEffect, useRef } from 'react'
 import Markdown from './Markdown.jsx'
 
 // Chat message renderers. `messages` is the source of truth; each item has a
-// `kind` (bubble | divider | stage | done). Mirrors the DOM the static UI built
-// imperatively.
+// `kind` (bubble | divider | stage | done | brief). Mirrors the DOM the static
+// UI built imperatively.
 
 function Row({ role, cls, children }) {
-  const avatar = <div className={`avatar ${role}`}>{role === 'user' ? 'Y' : 'U'}</div>
+  const avatar = (
+    <div className={`avatar ${role}`}>
+      {role === 'user' ? 'Y' : <img src="/favicon.png" alt="Utkrusht" />}
+    </div>
+  )
   const bubble = <div className={`bubble ${cls || ''}`}>{children}</div>
   return (
     <div className={`row ${role === 'user' ? 'user' : 'bot'}`}>
@@ -91,7 +95,7 @@ function Fragment({ label, value }) {
   )
 }
 
-export default function Chat({ messages }) {
+export default function Chat({ messages, briefUi }) {
   return (
     <>
       {messages.map((m) => {
