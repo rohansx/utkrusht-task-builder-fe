@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { SERVICE_CHIPS, SHAPE_CHIPS } from '../constants.js'
 import { parseScenario } from '../lib.js'
 
@@ -34,7 +35,7 @@ function StageDot({ status }) {
 
 // Preflight → input files → scenarios, shown INLINE with live logs so you can
 // watch the input files being generated (no modal, since this takes a while).
-function PrepProgress({ prepStages }) {
+function PrepProgress({ prepStages, showLogs = true }) {
   return (
     <div className="prep-stages">
       {prepStages.map((s) => (
@@ -43,7 +44,7 @@ function PrepProgress({ prepStages }) {
             <StageDot status={s.status} />
             <span>{s.label}</span>
           </div>
-          {s.log ? (
+          {showLogs && s.log ? (
             <details className="prep-stage-log" open={s.status === 'running'}>
               <summary>logs</summary>
               <pre>{s.log}</pre>
@@ -51,6 +52,69 @@ function PrepProgress({ prepStages }) {
           ) : null}
         </div>
       ))}
+    </div>
+  )
+}
+
+// One scenario at a time with ←/→ arrows — browsing is separate from picking:
+// arrows/dots change which card is shown, clicking the card selects it.
+function ScenarioCarousel({ list, picked, onPick }) {
+  const [idx, setIdx] = useState(0)
+  useEffect(() => {
+    setIdx(0)
+  }, [list])
+  const n = list.length
+  const cur = list[Math.min(idx, n - 1)]
+  const pickedIdx = list.indexOf(picked)
+  return (
+    <div className="wz-carousel">
+      <div className="wz-carousel-head">
+        <span>{`Scenario ${idx + 1} of ${n}`}</span>
+        {pickedIdx >= 0 && pickedIdx !== idx ? (
+          <span className="wz-picked-note">{`selected: #${pickedIdx + 1}`}</span>
+        ) : null}
+      </div>
+      <div className="wz-carousel-row">
+        <button
+          type="button"
+          className="wz-arrow"
+          aria-label="Previous scenario"
+          disabled={n < 2}
+          onClick={() => setIdx((i) => (i - 1 + n) % n)}
+        >
+          ←
+        </button>
+        <button
+          type="button"
+          className={`wz-scenario${cur === picked ? ' on' : ''}`}
+          onClick={() => onPick(cur)}
+        >
+          <span className="wz-radio" aria-hidden="true" />
+          <span className="wz-scenario-text">
+            <ScenarioText text={cur} />
+          </span>
+        </button>
+        <button
+          type="button"
+          className="wz-arrow"
+          aria-label="Next scenario"
+          disabled={n < 2}
+          onClick={() => setIdx((i) => (i + 1) % n)}
+        >
+          →
+        </button>
+      </div>
+      <div className="wz-dots">
+        {list.map((text, i) => (
+          <button
+            key={i}
+            type="button"
+            className={`wz-dot${i === idx ? ' cur' : ''}${text === picked ? ' picked' : ''}`}
+            aria-label={`Go to scenario ${i + 1}`}
+            onClick={() => setIdx(i)}
+          />
+        ))}
+      </div>
     </div>
   )
 }
@@ -174,21 +238,11 @@ export default function GenerateWizard({
 
             {scenarioStage.mode === 'list' &&
               (scenarioStage.list.length ? (
-                <div className="wz-scenarios">
-                  {scenarioStage.list.map((text, i) => (
-                    <button
-                      key={i}
-                      type="button"
-                      className={`wz-scenario${text === pickedScenario ? ' on' : ''}`}
-                      onClick={() => onPickScenario(text)}
-                    >
-                      <span className="wz-radio" aria-hidden="true" />
-                      <span className="wz-scenario-text">
-                        <ScenarioText text={text} />
-                      </span>
-                    </button>
-                  ))}
-                </div>
+                <ScenarioCarousel
+                  list={scenarioStage.list}
+                  picked={pickedScenario}
+                  onPick={onPickScenario}
+                />
               ) : (
                 <div className="scenario-empty">
                   No scenarios yet — build anyway and the pipeline will create and pick one.
@@ -208,13 +262,13 @@ export default function GenerateWizard({
           <div className="wizard-step">
             <div className="wz-sub">
               {buildStage.status === 'running'
-                ? 'Generating your task — prompts, code generation, and evaluation. Expand a stage to watch it work.'
+                ? 'Generating your task — prompts, code generation, and evaluation.'
                 : buildStage.status === 'done'
                   ? 'Done — your task is ready.'
                   : 'Generation failed.'}
             </div>
 
-            <PrepProgress prepStages={buildStage.stages} />
+            <PrepProgress prepStages={buildStage.stages} showLogs={false} />
 
             {buildStage.status === 'done' && (
               <div className="scenario-empty">

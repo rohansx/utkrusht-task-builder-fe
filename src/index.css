@@ -397,6 +397,29 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 .wz-actions .cta { width:auto; padding:11px 20px; }
 
 .wz-scenarios { display:flex; flex-direction:column; gap:10px; }
+
+/* Scenario carousel — one card at a time, arrows on the sides. */
+.wz-carousel { display:flex; flex-direction:column; gap:10px; }
+.wz-carousel-head { display:flex; align-items:baseline; gap:10px;
+  font-size:11px; font-weight:600; letter-spacing:0.04em;
+  text-transform:uppercase; color:var(--muted); }
+.wz-picked-note { font-weight:500; letter-spacing:0; text-transform:none;
+  color:var(--uk-green-deep); font-size:12px; }
+.wz-carousel-row { display:flex; align-items:center; gap:10px; }
+.wz-carousel-row .wz-scenario { flex:1; min-width:0; }
+.wz-arrow { width:34px; height:34px; flex:none; border-radius:50%;
+  background:var(--card); border:1px solid var(--border);
+  color:var(--uk-green); font-size:15px; font-weight:600; cursor:pointer;
+  display:grid; place-items:center;
+  transition:border-color .12s, background .12s; }
+.wz-arrow:hover:not([disabled]) { border-color:var(--uk-green);
+  background:var(--green-tint); }
+.wz-arrow[disabled] { opacity:.35; cursor:default; }
+.wz-dots { display:flex; justify-content:center; gap:7px; }
+.wz-dot { width:8px; height:8px; border-radius:50%; padding:0; cursor:pointer;
+  background:var(--border); border:1px solid transparent; }
+.wz-dot.cur { background:var(--uk-green); }
+.wz-dot.picked:not(.cur) { background:var(--card); border-color:var(--uk-green); }
 .wz-scenario { display:flex; align-items:flex-start; gap:12px; width:100%;
   text-align:left; cursor:pointer; background:var(--card);
   border:1px solid var(--border); border-radius:10px; padding:14px 16px;

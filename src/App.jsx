@@ -4,6 +4,7 @@ import { api, eventsUrl } from './api.js'
 import { loadTranscript, saveTranscript, clearTranscript } from './persist.js'
 import { nextId } from './lib.js'
 import {
+  PIPELINE_STAGES,
   PREP_STAGES,
   STARTERS,
   SERVICE_CHIPS,
