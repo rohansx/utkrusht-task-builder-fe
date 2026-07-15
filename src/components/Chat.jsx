@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react'
+import Markdown from './Markdown.jsx'
 
 // Chat message renderers. `messages` is the source of truth; each item has a
 // `kind` (bubble | divider | stage | done). Mirrors the DOM the static UI built
@@ -103,7 +104,8 @@ export default function Chat({ messages }) {
         }
         if (m.kind === 'stage') return <StageLog m={m} key={m.id} />
         if (m.kind === 'done') return <DoneCard m={m} key={m.id} />
-        // bubble — animated dots while the reply is pending
+        // bubble — animated dots while pending; bot replies render markdown,
+        // user messages stay literal (don't parse the user's own text).
         return (
           <Row role={m.role} cls={m.cls} key={m.id}>
             {m.pending ? (
@@ -112,6 +114,8 @@ export default function Chat({ messages }) {
                 <span />
                 <span />
               </span>
+            ) : m.role === 'bot' ? (
+              <Markdown text={m.text} />
             ) : (
               m.text
             )}
