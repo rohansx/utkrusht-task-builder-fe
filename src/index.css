@@ -1,0 +1,363 @@
+/* Task Builder — utkrusht.ai brand system.
+   Tokens sourced from Utkrushta/docs/_assets/utkrusht-brand-system.html:
+   Inter, green ink #0e6b3c (buttons, logo mark, left-border accents, one
+   shimmer phrase), page bg #f7f8fa, cards always #ffffff with 0.5px #e0e5ed
+   hairlines, radius 12px. Serif wordmark per the brand rule. */
+:root {
+  --uk-green:       #0e6b3c;
+  --uk-green-deep:  #0a4a29;
+  --uk-green-mid:   #1a8a50;
+  --uk-green-light: #2aad65;
+  --bg:             #f7f8fa;
+  --card:           #ffffff;
+  --border:         #e0e5ed;
+  --text:           #111111;
+  --muted:          #556677;
+  --faint:          #8fa3be;
+  --green-tint:     #e6f2ec;
+  --amber-text:     #92400e;
+  --amber-tint:     #fff8e6;
+  --radius:         12px;
+  --card-shadow:    0 1px 3px rgba(16,24,40,0.04);
+}
+* { box-sizing: border-box; }
+/* The [hidden] attribute must beat any class that sets `display` (e.g. the
+   modal/flex containers below), otherwise a hidden overlay still intercepts
+   clicks. */
+[hidden] { display: none !important; }
+html,body { height:100%; margin:0; }
+body {
+  font:14px/1.7 "Inter",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;
+  background:var(--bg);
+  color:var(--text);
+  display:flex; flex-direction:column;
+  overflow:hidden;
+}
+
+/* ---- header ------------------------------------------------------------ */
+header {
+  padding:12px 22px; border-bottom:0.5px solid var(--border);
+  background:var(--card);
+  display:flex; align-items:center; gap:10px;
+}
+.logo { width:28px; height:28px; display:block; }
+.wordmark {
+  font-family:Georgia,"Times New Roman",serif;
+  font-size:18px; color:var(--uk-green-deep); letter-spacing:-0.01em;
+}
+.header-sep { width:1px; height:20px; background:var(--border); margin:0 2px; }
+header h1 {
+  font-size:16px; margin:0; font-weight:700; letter-spacing:-0.02em;
+}
+
+/* The one shimmer phrase per page — brand signature. */
+.shimmer {
+  background:linear-gradient(90deg,#0a4a29 0%,#0e6b3c 30%,#2aad65 55%,#0a4a29 85%);
+  background-size:200% auto;
+  -webkit-background-clip:text; background-clip:text;
+  -webkit-text-fill-color:transparent;
+  animation:shimmer 3s linear infinite;
+}
+@keyframes shimmer { to { background-position:200% center; } }
+
+/* Header action buttons — outline variant so solid green stays reserved
+   for the primary actions (Send / Generate). */
+.header-actions { margin-left:auto; display:flex; gap:8px; }
+.hbtn {
+  background:var(--card); color:var(--uk-green);
+  border:1px solid var(--uk-green); border-radius:6px;
+  padding:6px 12px; font:inherit; font-size:13px; font-weight:600;
+  cursor:pointer;
+}
+.hbtn:hover { background:var(--green-tint); }
+
+/* ---- two-pane layout ----------------------------------------------------- */
+.layout {
+  flex:1; min-height:0;
+  display:grid; grid-template-columns:minmax(0,1fr) 320px;
+  gap:0;
+  width:min(1120px,100vw); margin:0 auto;
+}
+main { min-height:0; overflow-y:auto; padding:26px 24px 0;
+  display:flex; flex-direction:column; align-items:center; }
+.chat { width:100%; max-width:680px; display:flex; flex-direction:column;
+  gap:12px; flex:1; }
+
+/* ---- brief panel (right) -------------------------------------------------- */
+.brief-panel {
+  min-height:0; overflow-y:auto;
+  padding:26px 22px 150px 6px;
+  display:flex; flex-direction:column; gap:14px;
+}
+.panel-section {
+  background:var(--card); border:0.5px solid var(--border);
+  border-left:2.5px solid var(--uk-green);
+  border-radius:0 var(--radius) var(--radius) 0;
+  padding:14px 16px;
+  box-shadow:var(--card-shadow);
+}
+.panel-title {
+  font-size:11px; font-weight:600; letter-spacing:0.1em;
+  text-transform:uppercase; color:var(--uk-green); margin-bottom:10px;
+}
+.progress-track {
+  height:4px; border-radius:2px; background:var(--bg); overflow:hidden;
+}
+.progress-fill {
+  height:100%; width:0%;
+  background:linear-gradient(90deg,var(--uk-green),var(--uk-green-light));
+  border-radius:2px; transition:width .35s ease;
+}
+.progress-label { font-size:12px; color:var(--faint); margin:6px 0 10px; }
+
+.slots { list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; }
+.slots li {
+  display:flex; flex-direction:column; gap:1px;
+  padding:8px 10px; margin:0 -10px; border-radius:8px;
+}
+.slots li + li { border-top:0.5px solid var(--border); }
+.slots .slot-label { font-size:11px; font-weight:600; letter-spacing:0.04em;
+  text-transform:uppercase; color:var(--faint); display:flex;
+  align-items:center; gap:6px; }
+.slots .slot-value { font-size:13px; color:var(--text); word-break:break-word; }
+.slots li.empty .slot-value { color:var(--faint); font-style:italic; }
+.slots li.asking { background:var(--green-tint); }
+.slots li.asking .slot-label { color:var(--uk-green-deep); }
+.slots li.filled .slot-label::after {
+  content:"✓"; color:var(--uk-green); font-size:11px; text-transform:none;
+}
+.slots li.filled { cursor:pointer; }
+.slots li.filled:hover { background:var(--bg); }
+
+.panel-generate { display:flex; flex-direction:column; gap:10px; }
+.panel-review { display:flex; flex-direction:column; gap:12px; }
+.panel-review .cta { margin-top:0; width:100%; }
+.panel-review .env-pick { justify-content:space-between; }
+.gen-hint { font-size:12px; color:var(--faint); line-height:1.5; }
+
+/* ---- review step: instructions + scenario --------------------------------- */
+.review-field { display:flex; flex-direction:column; gap:7px; }
+.review-field + .review-field { padding-top:10px; border-top:0.5px solid var(--border); }
+.review-label { font-size:11px; font-weight:600; letter-spacing:0.04em;
+  text-transform:uppercase; color:var(--muted); display:flex;
+  flex-wrap:wrap; align-items:baseline; gap:6px; }
+.review-opt { font-weight:400; letter-spacing:0; text-transform:none;
+  color:var(--faint); font-size:11px; }
+.instructions { width:100%; resize:vertical; font:inherit; font-size:13px;
+  color:var(--text); background:var(--card); border:0.5px solid var(--border);
+  border-radius:8px; padding:8px 10px; line-height:1.5; }
+.instructions:focus { outline:none; border-color:var(--uk-green); }
+.suggest-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.suggest-chips:empty { display:none; }
+.suggest-chip { background:var(--green-tint); color:var(--uk-green-deep);
+  border:0.5px solid var(--border); border-radius:999px; padding:4px 10px;
+  font:inherit; font-size:12px; cursor:pointer; text-align:left; line-height:1.35; }
+.suggest-chip:hover { border-color:var(--uk-green); background:#dcecdf; }
+.suggest-status { font-size:11px; color:var(--faint); }
+
+.scenario-state { display:flex; flex-direction:column; gap:4px; }
+.scenario-current { font-size:13px; color:var(--text); }
+.scenario-current.picked { color:var(--uk-green-deep); font-weight:500; }
+.link-btn { align-self:flex-start; background:none; border:0; padding:0;
+  color:var(--uk-green); font:inherit; font-size:13px; font-weight:600;
+  cursor:pointer; }
+.link-btn:hover { color:var(--uk-green-deep); text-decoration:underline; }
+
+/* ---- scenario modal ------------------------------------------------------- */
+.modal-overlay { position:fixed; inset:0; z-index:50;
+  background:rgba(16,24,40,0.42); display:grid; place-items:center; padding:24px; }
+.modal { background:var(--card); border:0.5px solid var(--border);
+  border-radius:var(--radius); width:min(760px,94vw); max-height:88vh;
+  display:flex; flex-direction:column; overflow:hidden;
+  box-shadow:0 24px 60px rgba(16,24,40,0.24); }
+.modal-head { display:flex; align-items:center; justify-content:space-between;
+  padding:16px 20px; border-bottom:0.5px solid var(--border); }
+.modal-title { font-size:16px; font-weight:700; letter-spacing:-0.01em; }
+.modal-close { background:none; border:0; font-size:24px; line-height:1;
+  color:var(--faint); cursor:pointer; padding:0 4px; }
+.modal-close:hover { color:var(--text); }
+.modal-body { padding:16px 20px; overflow-y:auto; }
+.modal-prep { display:flex; flex-direction:column; gap:10px; }
+.scenario-list { display:flex; flex-direction:column; gap:10px; }
+.scenario-card { text-align:left; background:var(--card);
+  border:0.5px solid var(--border); border-left:2.5px solid var(--border);
+  border-radius:0 var(--radius) var(--radius) 0; padding:12px 16px; cursor:pointer;
+  font:inherit; color:var(--text); }
+.scenario-card:hover { border-left-color:var(--uk-green); background:var(--bg); }
+.scenario-card.picked { border-left-color:var(--uk-green);
+  box-shadow:0 0 0 1px var(--uk-green) inset; }
+.scenario-card .sc-num { font-size:11px; font-weight:600; letter-spacing:0.08em;
+  text-transform:uppercase; color:var(--uk-green); margin-bottom:6px; }
+.scenario-card .sc-sec { font-size:13px; line-height:1.5; margin:4px 0; }
+.scenario-card .sc-sec b { color:var(--uk-green-deep); font-weight:600; }
+.scenario-empty { font-size:13px; color:var(--muted); line-height:1.6; }
+
+/* Pipeline checklist inside the panel */
+.run-stages { list-style:none; margin:0; padding:0;
+  display:flex; flex-direction:column; gap:7px; }
+.run-stages li { display:flex; align-items:center; gap:9px; font-size:13px;
+  color:var(--muted); }
+.run-stages .dot {
+  width:16px; height:16px; border-radius:50%; flex-shrink:0;
+  display:grid; place-items:center; font-size:10px; font-weight:700;
+  background:var(--bg); border:1px solid var(--border); color:var(--faint);
+}
+.run-stages li.running { color:var(--text); }
+.run-stages li.running .dot {
+  border-color:var(--uk-green); color:var(--uk-green);
+  animation:pulse 1.2s ease-in-out infinite;
+}
+.run-stages li.ok .dot {
+  background:var(--uk-green); border-color:var(--uk-green); color:#fff;
+}
+.run-stages li.failed { color:var(--amber-text); font-weight:600; }
+.run-stages li.failed .dot {
+  background:var(--amber-tint); border-color:var(--amber-text);
+  color:var(--amber-text);
+}
+.run-stages .secs { margin-left:auto; font-size:11px; color:var(--faint); }
+@keyframes pulse { 50% { box-shadow:0 0 0 4px rgba(14,107,60,0.12); } }
+
+.run-result { margin-top:12px; padding-top:10px;
+  border-top:0.5px solid var(--border); font-size:13px; line-height:1.6; }
+.run-result a { color:var(--uk-green); text-decoration:underline;
+  word-break:break-all; }
+
+/* ---- chat bubbles ---------------------------------------------------------- */
+.row { display:flex; gap:10px; align-items:flex-end; }
+.row.user { justify-content:flex-end; }
+.avatar { width:28px; height:28px; border-radius:50%; display:grid;
+  place-items:center; font-size:12px; font-weight:700; flex-shrink:0; }
+.avatar.bot { background:var(--green-tint); color:var(--uk-green-deep);
+  border:0.5px solid var(--border); }
+.avatar.user { background:var(--uk-green); color:#fff; }
+.bubble { max-width:78%; padding:11px 14px; border-radius:14px;
+  white-space:pre-wrap; word-wrap:break-word; }
+.bot .bubble { background:var(--card); border:0.5px solid var(--border);
+  border-bottom-left-radius:4px; box-shadow:var(--card-shadow); }
+.user .bubble { background:var(--uk-green); color:#fff;
+  border-bottom-right-radius:4px; }
+.bubble a { color:var(--uk-green); text-decoration:underline; word-break:break-all; }
+.user .bubble a { color:#fff; }
+
+/* Pipeline / tool-call status lines */
+.stage { font-size:13px; color:var(--muted); letter-spacing:0.01em; }
+.stage.ok { color:var(--uk-green-deep); }
+.stage.failed { color:var(--amber-text); font-weight:600; }
+
+/* Brief + result cards in the chat (kept for restored transcripts + the
+   final result) — the brand's left-border accent card idiom. */
+.summary, .result-card { background:var(--card);
+  border:0.5px solid var(--border);
+  border-left:2.5px solid var(--uk-green);
+  border-radius:0 var(--radius) var(--radius) 0; padding:14px 18px;
+  box-shadow:var(--card-shadow); }
+.summary h4, .result-card h4 { margin:0 0 10px; font-size:11px;
+  font-weight:600; letter-spacing:0.1em; text-transform:uppercase;
+  color:var(--uk-green); }
+.kv { display:grid; grid-template-columns:130px 1fr; gap:6px 12px;
+  font-size:13px; }
+.kv .k { color:var(--muted); }
+.cta { background:var(--uk-green); color:#fff; border:0;
+  padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer;
+  font-family:inherit; }
+.cta:hover:not([disabled]) { background:var(--uk-green-deep); }
+.cta[disabled] { opacity:.45; cursor:default; }
+.summary .actions { margin-top:12px; display:flex; align-items:center; gap:12px; }
+.env-pick { display:flex; align-items:center; gap:6px;
+  font-size:13px; color:var(--muted); }
+.env-pick select { font:inherit; font-size:13px; color:var(--text);
+  background:var(--card); border:0.5px solid var(--border); border-radius:8px;
+  padding:6px 8px; cursor:pointer; }
+.env-pick select[disabled] { opacity:.45; cursor:default; }
+
+/* Collapsible per-stage live-log panels */
+.bot .bubble.stage-log { max-width:100%; padding:0; background:transparent;
+  border:0; box-shadow:none; }
+.stage-log details { border:0.5px solid var(--border);
+  border-radius:var(--radius); background:var(--card); overflow:hidden;
+  box-shadow:var(--card-shadow); }
+.stage-log summary { cursor:pointer; padding:9px 13px; list-style:none;
+  font-size:13px; color:var(--muted); letter-spacing:0.01em; user-select:none; }
+.stage-log summary::-webkit-details-marker { display:none; }
+.stage-log summary::before { content:"\25B8"; display:inline-block;
+  width:1.1em; color:var(--faint); }
+.stage-log details[open] summary::before { content:"\25BE"; }
+.stage-log pre.log { margin:0; padding:11px 13px; max-height:240px;
+  overflow:auto; background:var(--bg); border-top:0.5px solid var(--border);
+  font:12px/1.5 "SF Mono","Fira Code","JetBrains Mono",ui-monospace,
+    SFMono-Regular,Menlo,Consolas,monospace;
+  color:#3d4c5e; white-space:pre-wrap; word-break:break-word; }
+.stage-log pre.log:empty { display:none; }
+
+/* ---- starter suggestion chips --------------------------------------------- */
+.starters { width:100%; max-width:680px; margin-top:18px; }
+.starters-label { font-size:12px; color:var(--faint); margin-bottom:8px; }
+.starters-row { display:flex; flex-wrap:wrap; gap:8px; }
+.chip {
+  background:var(--card); border:0.5px solid var(--border);
+  border-radius:999px; padding:7px 14px; font:inherit; font-size:13px;
+  color:var(--muted); cursor:pointer; box-shadow:var(--card-shadow);
+  text-align:left;
+}
+.chip:hover { border-color:var(--uk-green); color:var(--uk-green-deep);
+  background:var(--green-tint); }
+
+/* ---- dock (sticky footer of the chat column) ------------------------------- */
+.dock { position:sticky; bottom:0; width:100%; max-width:680px;
+  padding:14px 0 18px; margin-top:auto;
+  background:linear-gradient(180deg,transparent,var(--bg) 38%); }
+.dock-inner { width:100%; display:flex; gap:8px;
+  background:var(--card); border:0.5px solid var(--border); border-radius:14px;
+  padding:8px 8px 8px 14px; align-items:center;
+  box-shadow:0 1px 3px rgba(16,24,40,0.04), 0 12px 40px rgba(16,24,40,0.05); }
+.dock input { flex:1; background:transparent; border:0; outline:0;
+  color:var(--text); font:inherit; }
+.dock input::placeholder { color:var(--faint); }
+.dock button { background:var(--uk-green); color:#fff; border:0;
+  padding:9px 16px; border-radius:6px; font-weight:600; cursor:pointer;
+  font-family:inherit; }
+.dock button:hover { background:var(--uk-green-deep); }
+
+/* Conversation divider — brand gradient rule with a centered label. */
+.divider {
+  align-self:stretch; display:flex; align-items:center; gap:12px;
+  color:var(--faint); font-size:12px; letter-spacing:0.02em;
+  margin:6px 0; user-select:none;
+}
+.divider::before, .divider::after {
+  content:""; flex:1; height:1px;
+  background:linear-gradient(90deg,transparent,var(--uk-green),transparent);
+  opacity:.35;
+}
+
+/* ---- responsive: stack the panel under the chat on narrow screens --------- */
+@media (max-width: 900px) {
+  .layout { display:flex; flex-direction:column; overflow-y:auto; }
+  main { overflow-y:visible; }
+  .brief-panel { overflow-y:visible; padding:0 24px 40px; }
+}
+
+/* Print-only document header — hidden on screen, shown when printing. */
+.print-head { display:none; }
+
+/* Print-to-PDF stylesheet. Triggered by the Download PDF button via
+   window.print(). Hides chrome, lets content flow across pages, and forces
+   every stage-log panel fully open so the logs print. */
+@media print {
+  header, .dock, .brief-panel, .starters, .modal-overlay { display:none !important; }
+  body { overflow:visible; height:auto; background:#fff; }
+  .layout { display:block; width:100%; }
+  main { overflow:visible; padding:0; display:block; }
+  .chat { width:100%; max-width:none; }
+  .print-head {
+    display:block; padding:12px 0 14px; font-weight:600; font-size:15px;
+    border-bottom:1px solid var(--border); margin-bottom:14px;
+    color:var(--uk-green-deep);
+  }
+  .row, .summary, .stage-log { page-break-inside:avoid; }
+  .bubble { max-width:100% !important; }
+  .stage-log details > *:not(summary) { display:block !important; }
+  .stage-log pre.log { max-height:none !important; }
+}
