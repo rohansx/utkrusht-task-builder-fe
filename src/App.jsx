@@ -82,9 +82,11 @@ export default function App() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, log: (m.log || '') + text } : m)))
   }
 
-  // Persist the chat (minus the transient "thinking" bubble).
+  // Persist the chat (minus the transient "thinking" bubble and the session
+  // divider — the divider is re-added fresh on each restore, so persisting it
+  // would make "— new session —" markers pile up on every reload).
   useEffect(() => {
-    saveTranscript(messages.filter((m) => !m.pending))
+    saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider'))
   }, [messages])
 
   // Keep the chat scrolled to the newest message.
