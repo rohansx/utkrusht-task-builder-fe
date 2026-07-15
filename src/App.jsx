@@ -118,8 +118,8 @@ export default function App() {
   // view. Scroll it into view whenever it opens.
   useEffect(() => {
     if (!wizardOpen) return
-    const el = chatRef.current?.parentElement
-    if (el) el.scrollTo({ top: 0, behavior: 'smooth' })
+    const w = chatRef.current?.parentElement?.querySelector('.wizard-inline')
+    if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [wizardOpen])
 
   // ---- brief panel ---------------------------------------------------------
@@ -188,7 +188,8 @@ export default function App() {
   }
 
   function startGeneration() {
-    if (generatingRef.current || !panelStateRef.current.ready || !sessionIdRef.current) return
+    if (generatingRef.current || !isBriefComplete(panelStateRef.current.brief) || !sessionIdRef.current)
+      return
     const curEnv = envRef.current
     const instr = (instructionsRef.current || '').trim()
     generatingRef.current = true
@@ -524,6 +525,25 @@ export default function App() {
 
       <div className="layout">
         <main>
+          <div className="chat" ref={chatRef}>
+            <Chat messages={messages} />
+          </div>
+
+          {showStarters && !wizardOpen && (
+            <div className="starters">
+              <div className="starters-label">Try one of these to get going:</div>
+              <div className="starters-row">
+                {STARTERS.map((t, i) => (
+                  <button key={i} type="button" className="chip" onClick={() => sendText(t)}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* The wizard renders BELOW the conversation so it appears down the
+              page (where the user clicked Generate), not at the top. */}
           <GenerateWizard
             open={wizardOpen}
             step={wizardStep}
@@ -543,39 +563,26 @@ export default function App() {
             onClose={closeWizard}
           />
 
-          <div className="chat" ref={chatRef}>
-            <Chat messages={messages} />
-          </div>
-
-          {showStarters && !wizardOpen && (
-            <div className="starters">
-              <div className="starters-label">Try one of these to get going:</div>
-              <div className="starters-row">
-                {STARTERS.map((t, i) => (
-                  <button key={i} type="button" className="chip" onClick={() => sendText(t)}>
-                    {t}
-                  </button>
-                ))}
+          {/* Hide the chat input while the wizard is open — no typing during
+              generate-setup, and it keeps the sticky dock from overlapping. */}
+          {!wizardOpen && (
+            <div className="dock">
+              <div className="dock-inner">
+                <input
+                  type="text"
+                  ref={inputElRef}
+                  value={input}
+                  placeholder="Type a message…"
+                  autoComplete="off"
+                  onChange={(e) => onInputChange(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') send()
+                  }}
+                />
+                <button onClick={send}>Send</button>
               </div>
             </div>
           )}
-
-          <div className="dock">
-            <div className="dock-inner">
-              <input
-                type="text"
-                ref={inputElRef}
-                value={input}
-                placeholder="Type a message…"
-                autoComplete="off"
-                onChange={(e) => onInputChange(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') send()
-                }}
-              />
-              <button onClick={send}>Send</button>
-            </div>
-          </div>
         </main>
 
         <BriefPanel
