@@ -107,7 +107,7 @@ export default function App() {
   // container (overflow-y:auto) — not `.chat`, which is a flex:1 child — so
   // scroll the parent, else new replies never scroll into view.
   useEffect(() => {
-    const el = chatRef.current?.parentElement
+    const el = mainRef.current
     if (el) el.scrollTop = el.scrollHeight
   }, [messages])
 
@@ -117,7 +117,7 @@ export default function App() {
   // view. Scroll it into view whenever it opens.
   useEffect(() => {
     if (!wizardOpen) return
-    const w = chatRef.current?.parentElement?.querySelector('.wizard-inline')
+    const w = mainRef.current?.querySelector('.wizard-inline')
     if (w) w.scrollIntoView({ behavior: 'smooth', block: 'start' })
   }, [wizardOpen])
 
