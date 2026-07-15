@@ -71,6 +71,8 @@ export default function GenerateWizard({
   pickedScenario,
   onPickScenario,
   onBuildTask,
+  buildStage, // { stages, status: 'running'|'done'|'failed', result, error }
+  onBuildDone,
   onClose,
 }) {
   if (!open) return null
@@ -78,7 +80,11 @@ export default function GenerateWizard({
     <div className="wizard-inline">
       <div className="modal-head">
         <div className="modal-title">
-          {step === 'instructions' ? 'Suggested instructions' : 'Pick a scenario'}
+          {step === 'instructions'
+            ? 'Suggested instructions'
+            : step === 'scenarios'
+              ? 'Pick a scenario'
+              : 'Building your task'}
         </div>
         <button className="modal-close" type="button" aria-label="Close" onClick={onClose}>
           ×
@@ -142,7 +148,7 @@ export default function GenerateWizard({
               </button>
             </div>
           </div>
-        ) : (
+        ) : step === 'scenarios' ? (
           <div className="wizard-step">
             <div className="wz-sub">
               Choose the scenario this task will be built from — it becomes part of the brief.
@@ -195,6 +201,33 @@ export default function GenerateWizard({
               </button>
               <button className="cta" disabled={scenarioStage.mode === 'prep'} onClick={onBuildTask}>
                 Build this task →
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="wizard-step">
+            <div className="wz-sub">
+              {buildStage.status === 'running'
+                ? 'Generating your task — prompts, code generation, and evaluation. Expand a stage to watch it work.'
+                : buildStage.status === 'done'
+                  ? 'Done — your task is ready.'
+                  : 'Generation failed.'}
+            </div>
+
+            <PrepProgress prepStages={buildStage.stages} />
+
+            {buildStage.status === 'done' && (
+              <div className="scenario-empty">
+                ✓ Task created{buildStage.result?.task_id ? ` — ID ${buildStage.result.task_id}` : ''}.
+              </div>
+            )}
+            {buildStage.status === 'failed' && (
+              <div className="scenario-empty">{buildStage.error}</div>
+            )}
+
+            <div className="wz-actions">
+              <button className="cta" disabled={buildStage.status === 'running'} onClick={onBuildDone}>
+                {buildStage.status === 'running' ? 'Building…' : 'Done'}
               </button>
             </div>
           </div>

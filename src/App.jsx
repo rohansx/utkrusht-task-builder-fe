@@ -52,6 +52,7 @@ export default function App() {
   const [selectedServices, setSelectedServices] = useState(new Set(['auto']))
   const [selectedShapes, setSelectedShapes] = useState(new Set())
   const [scenarioStage, setScenarioStage] = useState(emptyScenarioStage())
+  const [buildStage, setBuildStage] = useState({ stages: [], status: 'running', result: null, error: '' })
   const [pickedScenario, setPickedScenario] = useState('')
 
   // ---- refs (read inside async fetch / SSE callbacks) ----------------------
@@ -68,6 +69,7 @@ export default function App() {
   const activeStreamRef = useRef(null)
   const prepStreamRef = useRef(null)
   const prepTimerRef = useRef(null)
+  const buildTimerRef = useRef(null)
   const inputElRef = useRef(null)
   const chatRef = useRef(null)
   const initRef = useRef(false)
@@ -314,6 +316,9 @@ export default function App() {
       prepStreamRef.current = null
     }
     clearTimeout(prepTimerRef.current)
+    clearTimeout(buildTimerRef.current)
+    generatingRef.current = false
+    setGenerating(false)
     setWizardOpen(false)
   }
   function toggleService(id) {
@@ -412,10 +417,102 @@ export default function App() {
   }
 
   function onBuildTask() {
-    instructionsRef.current = composeInstructions()
+    if (generatingRef.current || !isBriefComplete(panelStateRef.current.brief) || !sessionIdRef.current)
+      return
+    const curEnv = envRef.current
+    const instr = composeInstructions()
+    instructionsRef.current = instr
     selectedScenarioRef.current = pickedScenario
+    generatingRef.current = true
+    setGenerating(true)
+    setWizardStep('building')
+    setBuildStage({
+      stages: PIPELINE_STAGES.map(([key, label]) => ({
+        key,
+        label,
+        status: scenariosPreparedRef.current && PREPARED_STAGES.includes(key) ? 'ok' : 'pending',
+        log: '',
+      })),
+      status: 'running',
+      result: null,
+      error: '',
+    })
+    api('/api/generate', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        session_id: sessionIdRef.current,
+        env: curEnv,
+        instructions: instr,
+        selected_scenario: selectedScenarioRef.current,
+        scenarios_prepared: scenariosPreparedRef.current,
+      }),
+    })
+      .then((r) => r.json())
+      .then((data) => pollBuild(data.run_id, curEnv))
+      .catch(() => {
+        generatingRef.current = false
+        setGenerating(false)
+        setBuildStage((prev) => ({ ...prev, status: 'failed', error: 'Could not start generation.' }))
+      })
+  }
+
+  // Poll the generation job so ALL five stages + their logs show live in the
+  // wizard — same view the prep step uses, so the pipeline doesn't vanish
+  // after Build.
+  function pollBuild(jobId, curEnv) {
+    clearTimeout(buildTimerRef.current)
+    const tick = () => {
+      api(`/api/runs/${jobId}/state?env=${curEnv}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const byLabel = {}
+          for (const s of data.stages || []) byLabel[s.label] = s
+          const stages = PIPELINE_STAGES.map(([key, label]) => {
+            const s = byLabel[key] || {}
+            return { key, label, status: s.status || 'pending', log: s.log || '' }
+          })
+          setBuildStage((prev) => ({ ...prev, stages }))
+          const st = data.status
+          if (st === 'done') {
+            generatingRef.current = false
+            setGenerating(false)
+            setBuildStage((prev) => ({ ...prev, status: 'done', result: { task_id: data.result_task_id } }))
+            return
+          }
+          if (st === 'failed' || st === 'cancelled') {
+            generatingRef.current = false
+            setGenerating(false)
+            setBuildStage((prev) => ({ ...prev, status: 'failed', error: data.error || 'Generation failed.' }))
+            return
+          }
+          buildTimerRef.current = setTimeout(tick, 1500)
+        })
+        .catch(() => {
+          buildTimerRef.current = setTimeout(tick, 2500)
+        })
+    }
+    tick()
+  }
+
+  // Record the outcome in the chat transcript, then close the wizard.
+  function finishBuild() {
+    if (buildStage.status === 'done') {
+      addDone({
+        status: 'completed',
+        task_id: buildStage.result?.task_id || '',
+        task_name: '',
+        task_type: '',
+        competencies: '',
+        env: envRef.current,
+        task_url: '',
+        outcome: '',
+        detail: '',
+      })
+    } else if (buildStage.status === 'failed') {
+      addBubble('bot', buildStage.error || 'Generation failed.', 'stage failed')
+    }
     closeWizard()
-    startGeneration()
   }
 
   // ---- header actions ------------------------------------------------------
@@ -560,6 +657,8 @@ export default function App() {
             pickedScenario={pickedScenario}
             onPickScenario={setPickedScenario}
             onBuildTask={onBuildTask}
+            buildStage={buildStage}
+            onBuildDone={finishBuild}
             onClose={closeWizard}
           />
 
