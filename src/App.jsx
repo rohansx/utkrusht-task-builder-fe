@@ -53,6 +53,7 @@ export default function App() {
   const inputRef = useRef('')
   const activeStreamRef = useRef(null)
   const prepStreamRef = useRef(null)
+  const prepTimerRef = useRef(null)
   const inputElRef = useRef(null)
   const chatRef = useRef(null)
   const initRef = useRef(false)
@@ -284,6 +285,7 @@ export default function App() {
       prepStreamRef.current.close()
       prepStreamRef.current = null
     }
+    clearTimeout(prepTimerRef.current)
     setWizardOpen(false)
   }
   function toggleService(id) {
@@ -305,7 +307,7 @@ export default function App() {
     setWizardStep('scenarios')
     setScenarioStage({
       mode: 'prep',
-      prepStages: PREP_STAGES.map(([key, label]) => ({ key, label, status: '' })),
+      prepStages: PREP_STAGES.map(([key, label]) => ({ key, label, status: 'pending', log: '' })),
       list: [],
       error: '',
     })
@@ -332,51 +334,53 @@ export default function App() {
       body: JSON.stringify({ session_id: sessionIdRef.current, env: curEnv }),
     })
       .then((r) => r.json())
-      .then((data) => streamPrepare(data.run_id, curEnv))
+      .then((data) => pollPrep(data.run_id, curEnv))
       .catch(() =>
         setScenarioStage((prev) => ({ ...prev, mode: 'error', error: 'Could not start scenario preparation.' }))
       )
   }
 
-  function streamPrepare(runId, curEnv) {
-    const es = new EventSource(eventsUrl(`/api/runs/${runId}/events`))
-    prepStreamRef.current = es
-    es.onmessage = (ev) => {
-      const e = JSON.parse(ev.data)
-      if (e.stage === 'done') {
-        es.close()
-        prepStreamRef.current = null
-        if (e.status === 'completed') {
-          scenariosPreparedRef.current = true
-          api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
-            .then((r) => r.json())
-            .then((data) =>
-              setScenarioStage((prev) => ({ ...prev, mode: 'list', list: (data && data.scenarios) || [] }))
-            )
-            .catch(() =>
-              setScenarioStage((prev) => ({
-                ...prev,
-                mode: 'error',
-                error: 'Scenarios were generated but could not be loaded.',
-              }))
-            )
-        } else {
-          setScenarioStage((prev) => ({ ...prev, mode: 'error', error: e.detail || 'Scenario preparation failed.' }))
-        }
-        return
-      }
-      if (PREPARED_STAGES.includes(e.stage)) {
-        const status = e.status === 'ok' ? 'ok' : e.status === 'failed' ? 'failed' : 'running'
-        setScenarioStage((prev) => ({
-          ...prev,
-          prepStages: prev.prepStages.map((s) => (s.key === e.stage ? { ...s, status } : s)),
-        }))
-      }
+  // Poll the run state (not SSE) so we can show each stage's LIVE LOG tail —
+  // you watch input files being generated, right in the panel.
+  function pollPrep(jobId, curEnv) {
+    clearTimeout(prepTimerRef.current)
+    const tick = () => {
+      api(`/api/runs/${jobId}/state?env=${curEnv}`)
+        .then((r) => r.json())
+        .then((data) => {
+          const byLabel = {}
+          for (const s of data.stages || []) byLabel[s.label] = s
+          const prep = PREP_STAGES.map(([key, label]) => {
+            const s = byLabel[key] || {}
+            return { key, label, status: s.status || 'pending', log: s.log || '' }
+          })
+          setScenarioStage((prev) => ({ ...prev, prepStages: prep }))
+          const st = data.status
+          if (st === 'done') {
+            scenariosPreparedRef.current = true
+            api(`/api/scenarios?session_id=${encodeURIComponent(sessionIdRef.current)}&env=${curEnv}`)
+              .then((r) => r.json())
+              .then((d) => setScenarioStage((prev) => ({ ...prev, mode: 'list', list: (d && d.scenarios) || [] })))
+              .catch(() =>
+                setScenarioStage((prev) => ({
+                  ...prev,
+                  mode: 'error',
+                  error: 'Scenarios were generated but could not be loaded.',
+                }))
+              )
+            return
+          }
+          if (st === 'failed' || st === 'cancelled') {
+            setScenarioStage((prev) => ({ ...prev, mode: 'error', error: data.error || 'Scenario preparation failed.' }))
+            return
+          }
+          prepTimerRef.current = setTimeout(tick, 1500)
+        })
+        .catch(() => {
+          prepTimerRef.current = setTimeout(tick, 2500)
+        })
     }
-    es.onerror = () => {
-      es.close()
-      prepStreamRef.current = null
-    }
+    tick()
   }
 
   function onBuildTask() {
@@ -493,11 +497,30 @@ export default function App() {
 
       <div className="layout">
         <main>
+          <GenerateWizard
+            open={wizardOpen}
+            step={wizardStep}
+            subtitle={wizardSubtitle}
+            selectedServices={selectedServices}
+            onToggleService={toggleService}
+            selectedShapes={selectedShapes}
+            onToggleShape={toggleShape}
+            instructions={instructions}
+            onInstructionsChange={setInstructions}
+            onGenerateScenarios={onGenerateScenarios}
+            onBack={() => setWizardStep('instructions')}
+            scenarioStage={scenarioStage}
+            pickedScenario={pickedScenario}
+            onPickScenario={setPickedScenario}
+            onBuildTask={onBuildTask}
+            onClose={closeWizard}
+          />
+
           <div className="chat" ref={chatRef}>
             <Chat messages={messages} />
           </div>
 
-          {showStarters && (
+          {showStarters && !wizardOpen && (
             <div className="starters">
               <div className="starters-label">Try one of these to get going:</div>
               <div className="starters-row">
@@ -541,25 +564,6 @@ export default function App() {
           run={run}
         />
       </div>
-
-      <GenerateWizard
-        open={wizardOpen}
-        step={wizardStep}
-        subtitle={wizardSubtitle}
-        selectedServices={selectedServices}
-        onToggleService={toggleService}
-        selectedShapes={selectedShapes}
-        onToggleShape={toggleShape}
-        instructions={instructions}
-        onInstructionsChange={setInstructions}
-        onGenerateScenarios={onGenerateScenarios}
-        onBack={() => setWizardStep('instructions')}
-        scenarioStage={scenarioStage}
-        pickedScenario={pickedScenario}
-        onPickScenario={setPickedScenario}
-        onBuildTask={onBuildTask}
-        onClose={closeWizard}
-      />
     </>
   )
 }

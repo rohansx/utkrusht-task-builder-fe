@@ -103,10 +103,18 @@ export default function Chat({ messages }) {
         }
         if (m.kind === 'stage') return <StageLog m={m} key={m.id} />
         if (m.kind === 'done') return <DoneCard m={m} key={m.id} />
-        // bubble
+        // bubble — animated dots while the reply is pending
         return (
           <Row role={m.role} cls={m.cls} key={m.id}>
-            {m.text}
+            {m.pending ? (
+              <span className="thinking" aria-label="thinking">
+                <span />
+                <span />
+                <span />
+              </span>
+            ) : (
+              m.text
+            )}
           </Row>
         )
       })}
