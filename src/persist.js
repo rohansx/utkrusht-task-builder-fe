@@ -1,41 +1,34 @@
-// Transcript persistence (localStorage) — mirrors the static UI. The chat
-// message list is saved so a page reload can re-render the conversation
-// read-only. Debounced; self-disables on a quota error.
-const STORE_KEY = 'taskbuilder.transcript'
+// ---- session history (left panel) -----------------------------------------
+// Each conversation is archived under its own entry so the sidebar can list
+// past sessions and re-open any one read-only. Keyed by the backend session id
+// so re-opening the same conversation upserts in place instead of duplicating.
+const SESSIONS_KEY = 'taskbuilder.sessions'
+const MAX_SESSIONS = 40
 
-export function loadTranscript() {
-  let saved
+export function loadSessions() {
   try {
-    saved = JSON.parse(localStorage.getItem(STORE_KEY) || '[]')
+    const a = JSON.parse(localStorage.getItem(SESSIONS_KEY) || '[]')
+    return Array.isArray(a) ? a : []
   } catch {
-    saved = []
+    return []
   }
-  return Array.isArray(saved) ? saved : []
 }
 
-let saveTimer = null
-let disabled = false
+let sessTimer = null
+let sessDisabled = false
 
-export function saveTranscript(items) {
-  if (disabled) return
-  clearTimeout(saveTimer)
-  saveTimer = setTimeout(() => {
+// Persist the whole list (debounced, newest-first, capped). Kept dumb: the
+// caller owns the upsert/order so history and live chat share one save path.
+export function saveSessions(list) {
+  if (sessDisabled) return
+  clearTimeout(sessTimer)
+  sessTimer = setTimeout(() => {
     try {
-      localStorage.setItem(STORE_KEY, JSON.stringify(items))
+      localStorage.setItem(SESSIONS_KEY, JSON.stringify(list.slice(0, MAX_SESSIONS)))
     } catch (e) {
-      disabled = true
+      sessDisabled = true
       // eslint-disable-next-line no-console
-      console.warn('Task Builder: transcript persistence disabled —', e)
+      console.warn('Task Builder: session history persistence disabled —', e)
     }
   }, 500)
-}
-
-export function clearTranscript() {
-  disabled = false
-  clearTimeout(saveTimer)
-  try {
-    localStorage.removeItem(STORE_KEY)
-  } catch {
-    /* ignore */
-  }
 }

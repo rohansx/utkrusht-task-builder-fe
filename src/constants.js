@@ -46,6 +46,52 @@ export const SHAPE_CHIPS = [
   { id: 'tests', label: 'Require unit tests', directive: 'Require the candidate to write unit tests.' },
 ]
 
+// Right-panel default skills — 9 famous ones (all exist in the dev DB). The
+// full ~331-skill list is reachable via the search box.
+export const FAMOUS_SKILLS = [
+  'Python',
+  'TypeScript',
+  'Java',
+  'Golang',
+  'PostgreSQL',
+  'Docker',
+  'Kubernetes',
+  'MongoDB',
+  'Redis',
+]
+
+// Right-panel "Suggested roles" — curated, click-to-prefill the composer.
+// Static on purpose: roles are a small fixed vocabulary, not DB-driven.
+export const ROLE_SUGGESTIONS = [
+  'Frontend Engineer',
+  'Backend Engineer',
+  'Full-stack Engineer',
+  'Data Engineer',
+  'ML / AI Engineer',
+  'DevOps / Platform Engineer',
+  'Mobile Engineer',
+  'QA / SDET',
+]
+
+// Quick-start stacks for the right panel (prefill the composer with a stack).
+export const POPULAR_STACKS = [
+  'React + TypeScript',
+  'Node.js + PostgreSQL',
+  'Python + FastAPI',
+  'Java + Spring Boot',
+  'Java + Kafka',
+  'Go + gRPC',
+  'Django + Redis',
+  'Next.js + Prisma',
+  'Spring Boot + Kafka',
+  'FastAPI + PostgreSQL',
+  'Rust + Actix',
+  'NestJS + MongoDB',
+  'Ruby on Rails',
+  'Kubernetes + Docker',
+  'React + GraphQL',
+]
+
 export const STARTERS = [
   'An INTERMEDIATE React + TypeScript task for a frontend engineer, focused on state management, e-commerce domain',
   'A BASIC Java + Kafka task for a backend engineer, focused on consumer groups, logistics domain',
