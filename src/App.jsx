@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { api, eventsUrl } from './api.js'
 import { registerIds, track } from './analytics.js'
-import { loadTranscript, saveTranscript, clearTranscript } from './persist.js'
+import { loadSessions, saveSessions } from './persist.js'
 import { nextId } from './lib.js'
 import {
   PIPELINE_STAGES,
@@ -15,6 +15,16 @@ import {
 import Header from './components/Header.jsx'
 import Chat from './components/Chat.jsx'
 import GenerateWizard from './components/GenerateWizard.jsx'
+import HistoryPanel from './components/HistoryPanel.jsx'
+import SkillsPanel from './components/SkillsPanel.jsx'
+
+// Sidebar session title: first thing the user typed, else the brief's stack.
+function deriveTitle(msgs, brief) {
+  const firstUser = msgs.find((m) => m.kind === 'bubble' && m.role === 'user')
+  if (firstUser?.text?.trim()) return firstUser.text.trim().slice(0, 70)
+  const comps = (brief?.competencies || []).join(', ')
+  return comps || 'New task'
+}
 
 const EMPTY_PANEL = { brief: {}, missing: [], ready: false }
 const PREPARED_STAGES = ['00_preflight', '01_input_files', '02_scenarios']
@@ -44,6 +54,13 @@ export default function App() {
   const [showStarters, setShowStarters] = useState(false)
   const [env, setEnv] = useState('dev')
   const [printDate, setPrintDate] = useState('')
+
+  // side panels
+  const [sessions, setSessions] = useState(() => loadSessions())
+  const [viewingId, setViewingId] = useState(null) // non-null ⇒ browsing an archived session read-only
+  const [showHistory, setShowHistory] = useState(true)
+  const [showSkills, setShowSkills] = useState(true)
+  const liveMessagesRef = useRef(null) // stashes the live chat while viewing an archived session
 
   // wizard
   const [wizardOpen, setWizardOpen] = useState(false)
@@ -98,12 +115,32 @@ export default function App() {
     setMessages((prev) => prev.map((m) => (m.id === id ? { ...m, log: (m.log || '') + text } : m)))
   }
 
-  // Persist the chat (minus the transient "thinking" bubble, the session
-  // divider — re-added fresh on each restore — and the brief card, which is
-  // live session state and would be stale in a restored transcript).
+  // Archive the live conversation into the session history (left panel). Skipped
+  // while viewing an archived session (we must not overwrite it with itself) and
+  // for empty sessions. Keyed by the backend session id so it upserts in place.
   useEffect(() => {
-    saveTranscript(messages.filter((m) => !m.pending && m.kind !== 'divider' && m.kind !== 'brief'))
-  }, [messages])
+    if (!sessionId || viewingId) return
+    const content = messages.filter((m) => !m.pending && m.kind !== 'divider' && m.kind !== 'brief')
+    // Only archive a session the user actually engaged with — skip greeting-only.
+    if (!content.some((m) => m.kind === 'bubble' && m.role === 'user')) return
+    const title = deriveTitle(content, panelStateRef.current.brief)
+    const taskId = [...content].reverse().find((m) => m.kind === 'done')?.task_id || ''
+    setSessions((prev) => {
+      const now = Date.now()
+      const existing = prev.find((s) => s.id === sessionId)
+      const entry = {
+        id: sessionId,
+        title,
+        messages: content,
+        createdAt: existing?.createdAt || now,
+        updatedAt: now,
+        taskId: taskId || existing?.taskId || '',
+      }
+      const next = [entry, ...prev.filter((s) => s.id !== sessionId)]
+      saveSessions(next)
+      return next
+    })
+  }, [messages, sessionId, viewingId])
 
   // Keep the chat scrolled to the newest message. `main` is the scroll
   // container (overflow-y:auto) — not `.chat`, which is a flex:1 child — so
@@ -508,6 +545,42 @@ export default function App() {
     closeWizard()
   }
 
+  // ---- session history (left panel) ---------------------------------------
+  function backToLive() {
+    if (!viewingId) return
+    setMessages(liveMessagesRef.current || [])
+    liveMessagesRef.current = null
+    setViewingId(null)
+  }
+  function openSession(s) {
+    if (s.id === sessionId) return backToLive() // it's the live one — just return to it
+    if (!viewingId) liveMessagesRef.current = messages // stash the live chat once
+    setViewingId(s.id)
+    setShowStarters(false)
+    setWizardOpen(false)
+    setMessages((s.messages || []).map((m) => ({ ...m, id: m.id ?? nextId() })))
+  }
+  function deleteSession(id) {
+    setSessions((prev) => {
+      const next = prev.filter((s) => s.id !== id)
+      saveSessions(next)
+      return next
+    })
+    if (id === viewingId) backToLive()
+  }
+
+  // Right-panel picks prefill the composer (leaving an archived view first).
+  function prefill(text) {
+    if (viewingId) backToLive()
+    setInput(text)
+    inputRef.current = text
+    if (inputElRef.current) inputElRef.current.focus()
+  }
+  const onPickSkill = (name, prof = 'INTERMEDIATE') =>
+    prefill(`Create a ${prof} ${name} task for a `)
+  const onPickRole = (role) => prefill(`Create a task for a ${role} using `)
+  const onPickStack = (stack) => prefill(`Create a task using ${stack} for a `)
+
   // ---- header actions ------------------------------------------------------
   function newTask() {
     if (!window.confirm('Discard this conversation and start a new task?')) return
@@ -515,7 +588,8 @@ export default function App() {
       activeStreamRef.current.close()
       activeStreamRef.current = null
     }
-    clearTranscript()
+    liveMessagesRef.current = null
+    setViewingId(null)
     setMessages([])
     sessionIdRef.current = null
     setSessionId(null)
@@ -572,22 +646,13 @@ export default function App() {
     if (inputElRef.current) inputElRef.current.focus()
   }
 
-  // ---- one-time init: restore transcript, then start a fresh session -------
+  // ---- one-time init: always start a fresh session ------------------------
+  // Past conversations live in the History panel (localStorage sessions), so a
+  // refresh no longer replays the previous chat inline — it starts clean.
   useEffect(() => {
     if (initRef.current) return
     initRef.current = true
-    const saved = loadTranscript()
-    if (saved.length) {
-      const normalized = saved.map((m) => ({
-        ...m,
-        id: m.id ?? nextId(),
-        open: m.kind === 'stage' ? m.status !== 'ok' : m.open,
-      }))
-      setMessages([...normalized, { id: nextId(), kind: 'divider', text: '— new session —' }])
-      setShowStarters(false)
-    } else {
-      setShowStarters(true)
-    }
+    setShowStarters(true)
     startSession()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -616,18 +681,45 @@ export default function App() {
 
   return (
     <>
-      <Header onNewTask={newTask} onDownloadPdf={downloadPdf} />
+      <Header
+        onNewTask={newTask}
+        onDownloadPdf={downloadPdf}
+        showHistory={showHistory}
+        onToggleHistory={() => setShowHistory((v) => !v)}
+        showSkills={showSkills}
+        onToggleSkills={() => setShowSkills((v) => !v)}
+      />
       <div className="print-head" aria-hidden="true">
         Utkrusht Task Builder — <span id="print-date">{printDate}</span>
       </div>
 
-      <div className="layout">
+      <div className={`layout${showHistory ? ' with-left' : ''}${showSkills ? ' with-right' : ''}`}>
+        {showHistory && (
+          <HistoryPanel
+            sessions={sessions}
+            currentId={sessionId}
+            viewingId={viewingId}
+            onOpen={openSession}
+            onDelete={deleteSession}
+            onNew={newTask}
+          />
+        )}
+
         <main ref={mainRef}>
+          {viewingId && (
+            <div className="viewing-banner">
+              <span>Viewing a saved session — read only.</span>
+              <button type="button" className="link-btn" onClick={backToLive}>
+                ← Back to current
+              </button>
+            </div>
+          )}
+
           <div className="chat">
             <Chat messages={messages} briefUi={briefUi} />
           </div>
 
-          {showStarters && !wizardOpen && (
+          {showStarters && !wizardOpen && !viewingId && (
             <div className="starters">
               <div className="starters-label">Try one of these to get going:</div>
               <div className="starters-row">
@@ -663,9 +755,9 @@ export default function App() {
             onClose={closeWizard}
           />
 
-          {/* Hide the chat input while the wizard is open — no typing during
-              generate-setup, and it keeps the sticky dock from overlapping. */}
-          {!wizardOpen && (
+          {/* Hide the chat input while the wizard is open or while browsing an
+              archived session (read-only) — no typing in either mode. */}
+          {!wizardOpen && !viewingId && (
             <div className="dock">
               <div className="dock-inner">
                 <input
@@ -684,6 +776,14 @@ export default function App() {
             </div>
           )}
         </main>
+
+        {showSkills && (
+          <SkillsPanel
+            onPickSkill={onPickSkill}
+            onPickRole={onPickRole}
+            onPickStack={onPickStack}
+          />
+        )}
       </div>
     </>
   )
