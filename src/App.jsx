@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { api, eventsUrl } from './api.js'
+import { registerIds, track } from './analytics.js'
 import { loadTranscript, saveTranscript, clearTranscript } from './persist.js'
 import { nextId } from './lib.js'
 import {
@@ -148,6 +149,9 @@ export default function App() {
       const data = await res.json()
       sessionIdRef.current = data.session_id
       setSessionId(data.session_id)
+      // Tag this replay/session with the conversation id so it's searchable.
+      registerIds({ conversation_id: data.session_id })
+      track('session_started', { conversation_id: data.session_id })
       addBubble('bot', data.reply)
     } catch {
       addBubble('bot', 'Could not connect to the server. Is the backend running?')
@@ -206,7 +210,16 @@ export default function App() {
       }),
     })
       .then((r) => r.json())
-      .then((data) => streamRun(data.run_id))
+      .then((data) => {
+        // Tag the replay/session with the generation job id too.
+        registerIds({ generation_run_id: data.run_id })
+        track('generation_started', {
+          run_id: data.run_id,
+          conversation_id: sessionIdRef.current,
+          env: curEnv,
+        })
+        streamRun(data.run_id)
+      })
       .catch(() => {
         generatingRef.current = false
         setGenerating(false)
@@ -227,6 +240,13 @@ export default function App() {
       env: e.env || '',
     }
     addDone(spec)
+    // run_id + conversation_id ride along as registered super-properties.
+    track('generation_finished', {
+      status: e.status,
+      outcome: e.outcome || '',
+      task_id: e.task_id || '',
+      task_url: e.task_url || '',
+    })
     generatingRef.current = false
     setGenerating(false)
   }
