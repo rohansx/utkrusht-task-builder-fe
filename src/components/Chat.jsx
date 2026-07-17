@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import Markdown from './Markdown.jsx'
 import BriefCard from './BriefCard.jsx'
+import TaskDetailCard from './TaskDetailCard.jsx'
 
 // Chat message renderers. `messages` is the source of truth; each item has a
 // `kind` (bubble | divider | stage | done | brief). Mirrors the DOM the static
@@ -54,10 +55,28 @@ function StageLog({ m }) {
   )
 }
 
-function DoneCard({ m }) {
+function DoneCard({ m, onHydrateTask }) {
+  // Older done-messages (recorded before the detail card existed, or saved
+  // before the fetch resolved) carry only task_id — ask App to fetch the
+  // detail and patch it in, upgrading this card in place.
+  const wantsHydration = m.status === 'completed' && !m.task && !!m.task_id
+  useEffect(() => {
+    if (wantsHydration) onHydrateTask?.(m)
+  }, [wantsHydration, m, onHydrateTask])
   if (m.status !== 'completed') {
     return <Row role="bot" cls="stage failed">{m.outcome || m.detail || m.status}</Row>
   }
+  // Full task detail (title / problem statement / outcomes) — the same card
+  // the recruiter app shows when sharing a task with candidates.
+  if (m.task) {
+    return (
+      <Row role="bot" cls="result-card">
+        <h4>Task created</h4>
+        <TaskDetailCard task={m.task} />
+      </Row>
+    )
+  }
+  // Fallback for restored transcripts / detail fetch failures.
   const rows = [
     ['Task ID', m.task_id],
     ['Name', m.task_name],
@@ -96,7 +115,7 @@ function Fragment({ label, value }) {
   )
 }
 
-export default function Chat({ messages, briefUi }) {
+export default function Chat({ messages, briefUi, onHydrateTask }) {
   return (
     <>
       {messages.map((m) => {
@@ -108,7 +127,7 @@ export default function Chat({ messages, briefUi }) {
           )
         }
         if (m.kind === 'stage') return <StageLog m={m} key={m.id} />
-        if (m.kind === 'done') return <DoneCard m={m} key={m.id} />
+        if (m.kind === 'done') return <DoneCard m={m} onHydrateTask={onHydrateTask} key={m.id} />
         if (m.kind === 'brief') {
           return (
             <Row role="bot" cls="summary brief-card" key={m.id}>

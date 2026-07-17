@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { SERVICE_CHIPS, SHAPE_CHIPS } from '../constants.js'
 import { parseScenario } from '../lib.js'
+import TaskDetailCard from './TaskDetailCard.jsx'
 
 function ChipToggle({ on, label, onClick }) {
   return (
@@ -270,11 +271,15 @@ export default function GenerateWizard({
 
             <PrepProgress prepStages={buildStage.stages} showLogs={false} />
 
-            {buildStage.status === 'done' && (
-              <div className="scenario-empty">
-                ✓ Task created{buildStage.result?.task_id ? ` — ID ${buildStage.result.task_id}` : ''}.
-              </div>
-            )}
+            {buildStage.status === 'done' &&
+              (buildStage.result?.details ? (
+                <TaskDetailCard task={buildStage.result.details} />
+              ) : (
+                <div className="scenario-empty">
+                  ✓ Task created{buildStage.result?.task_id ? ` — ID ${buildStage.result.task_id}` : ''}.{' '}
+                  <span className="task-detail-loading">Loading task details…</span>
+                </div>
+              ))}
             {buildStage.status === 'failed' && (
               <div className="scenario-empty">{buildStage.error}</div>
             )}

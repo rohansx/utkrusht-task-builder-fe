@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { flushSync } from 'react-dom'
 import { api, eventsUrl } from './api.js'
+import { fetchTaskDetail } from './taskDetail.js'
 import { registerIds, track } from './analytics.js'
 import { loadSessions, saveSessions } from './persist.js'
 import { nextId } from './lib.js'
@@ -275,8 +276,9 @@ export default function App() {
       task_type: e.task_type || '',
       competencies: e.competencies || '',
       env: e.env || '',
+      task: null,
     }
-    addDone(spec)
+    const id = addDone(spec)
     // run_id + conversation_id ride along as registered super-properties.
     track('generation_finished', {
       status: e.status,
@@ -286,6 +288,13 @@ export default function App() {
     })
     generatingRef.current = false
     setGenerating(false)
+    // Upgrade the plain done-card to the full task detail card once the
+    // task row is readable (title / problem statement / outcomes).
+    if (e.status === 'completed' && e.task_id) {
+      fetchTaskDetail(e.task_id, e.env || envRef.current).then((details) => {
+        if (details) patchMessage(id, { task: details })
+      })
+    }
   }
 
   function streamRun(runId) {
@@ -507,7 +516,8 @@ export default function App() {
           if (st === 'done') {
             generatingRef.current = false
             setGenerating(false)
-            setBuildStage((prev) => ({ ...prev, status: 'done', result: { task_id: data.result_task_id } }))
+            setBuildStage((prev) => ({ ...prev, status: 'done', result: { task_id: data.result_task_id, details: null } }))
+            if (data.result_task_id) fetchTaskDetails(data.result_task_id, curEnv)
             return
           }
           if (st === 'failed' || st === 'cancelled') {
@@ -525,12 +535,41 @@ export default function App() {
     tick()
   }
 
+  // The generated task's display detail (title / problem statement / expected
+  // outcomes — same card the recruiter app shows when sharing a task).
+  // Fetched once the build reports done; patched into buildStage.result so
+  // the wizard's final step and the chat done-card can render it.
+  function fetchTaskDetails(taskId, curEnv) {
+    fetchTaskDetail(taskId, curEnv).then((details) => {
+      if (!details) return
+      setBuildStage((prev) =>
+        prev.result?.task_id === taskId
+          ? { ...prev, result: { ...prev.result, details } }
+          : prev
+      )
+    })
+  }
+
+  // Upgrade an old chat done-card (task_id only — recorded before the detail
+  // card existed, or restored from an archived session) to the full task
+  // detail card. Patching the message means the archive effect re-saves it
+  // with the detail, so each card is fetched at most once per session.
+  const hydratedTasksRef = useRef(new Set())
+  function hydrateTask(m) {
+    if (!m.task_id || hydratedTasksRef.current.has(m.id)) return
+    hydratedTasksRef.current.add(m.id)
+    fetchTaskDetail(m.task_id, m.env || envRef.current).then((details) => {
+      if (details) patchMessage(m.id, { task: details })
+    })
+  }
+
   // Record the outcome in the chat transcript, then close the wizard.
   function finishBuild() {
     if (buildStage.status === 'done') {
       addDone({
         status: 'completed',
         task_id: buildStage.result?.task_id || '',
+        task: buildStage.result?.details || null,
         task_name: '',
         task_type: '',
         competencies: '',
@@ -716,7 +755,7 @@ export default function App() {
           )}
 
           <div className="chat">
-            <Chat messages={messages} briefUi={briefUi} />
+            <Chat messages={messages} briefUi={briefUi} onHydrateTask={hydrateTask} />
           </div>
 
           {showStarters && !wizardOpen && !viewingId && (

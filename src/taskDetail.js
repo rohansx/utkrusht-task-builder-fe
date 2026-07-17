@@ -1,0 +1,90 @@
+// Fetch the display detail of a generated task (title / problem statement /
+// expected outcomes — the recruiter share-card fields).
+//
+// Primary source: the builder backend's GET /api/tasks/{id}, whose field
+// mapping mirrors the recruiter client's transformTaskRow. Fallback: when the
+// deployed backend predates that endpoint (404), read the dev `tasks` row
+// straight from Supabase (anon SELECT, same credentials the skills panel
+// uses) and apply the identical transform client-side. Dev env only — the
+// anon key in the build is the dev project's.
+import { api } from './api.js'
+
+const SB_URL = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
+const SB_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
+
+const DEFAULT_TASK_TIME_MINS = 45 // recruiter SAMPLE_QUESTIONS.DEFAULT_TASK_TIME_MINS
+
+// Every `dataset` / `dataset2` / `dataset3`... URL, ordered by numeric suffix
+// (no suffix = 1). Mirrors the recruiter client's collectDatasets.
+function collectDatasets(resources) {
+  const found = []
+  for (const [key, value] of Object.entries(resources || {})) {
+    const m = /^dataset(\d*)$/.exec(key)
+    if (!m || typeof value !== 'string' || !value.trim()) continue
+    found.push([m[1] ? parseInt(m[1], 10) : 1, value.trim()])
+  }
+  return found.sort((a, b) => a[0] - b[0]).map(([, url]) => url)
+}
+
+function transformRow(row) {
+  const blob = row.task_blob || {}
+
+  let problemStatement = ''
+  if (Array.isArray(blob.short_overview)) {
+    problemStatement = blob.short_overview.join('\n\n')
+  } else if (typeof blob.short_overview === 'string') {
+    problemStatement = blob.short_overview
+  } else {
+    problemStatement = blob.question || ''
+  }
+
+  let outcomes = blob.outcomes || []
+  if (!Array.isArray(outcomes)) outcomes = [outcomes]
+
+  const skills = []
+  const seen = new Set()
+  for (const c of row.criterias || []) {
+    const name = c?.name
+    if (!name || seen.has(name)) continue
+    seen.add(name)
+    skills.push({ name, proficiency: c.proficiency || '' })
+  }
+
+  const resources = blob.resources || {}
+  return {
+    task_id: row.task_id,
+    title: blob.title || 'Untitled Task',
+    problem_statement: problemStatement,
+    outcomes: outcomes.map(String),
+    skills,
+    time_limit_mins: row.time_for_task_mins || DEFAULT_TASK_TIME_MINS,
+    resources: {
+      github_gist: resources.github_gist || '',
+      github_repo: resources.github_repo || '',
+      datasets: collectDatasets(resources),
+    },
+  }
+}
+
+export async function fetchTaskDetail(taskId, env) {
+  try {
+    const res = await api(`/api/tasks/${encodeURIComponent(taskId)}?env=${env}`)
+    if (res.ok) return await res.json()
+  } catch {
+    /* fall through to the Supabase fallback */
+  }
+  if (!SB_URL || !SB_KEY || env !== 'dev') return null
+  try {
+    const url =
+      `${SB_URL}/rest/v1/tasks?task_id=eq.${encodeURIComponent(taskId)}` +
+      '&select=task_id,task_blob,criterias,time_for_task_mins'
+    const res = await fetch(url, {
+      headers: { apikey: SB_KEY, Authorization: `Bearer ${SB_KEY}` },
+    })
+    if (!res.ok) return null
+    const rows = await res.json()
+    return rows.length ? transformRow(rows[0]) : null
+  } catch {
+    return null
+  }
+}
