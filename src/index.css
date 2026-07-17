@@ -199,8 +199,11 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
   }
   .side { display:none; }
 }
+/* Bottom padding is the chat's own — `main` has none, and the sticky dock
+   (which normally masks the gap) is hidden while the wizard is open, so
+   without it the last message rides the viewport edge. */
 .chat { width:100%; max-width:680px; display:flex; flex-direction:column;
-  gap:12px; flex:1; }
+  gap:12px; flex:1; padding-bottom:28px; }
 
 /* ---- inline task-brief card (lives in the chat stream) --------------------- */
 .progress-track {
@@ -384,8 +387,8 @@ main { min-height:0; overflow-y:auto; padding:26px 24px 0;
 .kv .k { color:var(--muted); }
 
 /* ---- generated-task detail card (mirrors the recruiter TaskDetailPanel) --- */
-.task-detail { display:flex; flex-direction:column; gap:12px; text-align:left;
-  padding-bottom:12px; }
+.task-detail { display:flex; flex-direction:column; gap:14px; text-align:left;
+  padding:4px 0 8px; }
 .task-detail-head { display:flex; flex-direction:column; gap:8px; }
 .task-detail-title { margin:0; font-size:17px; font-weight:700; line-height:1.4;
   color:var(--text); }
