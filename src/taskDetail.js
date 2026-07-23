@@ -7,8 +7,6 @@
 // straight from Supabase (anon SELECT, same credentials the skills panel
 // uses) and apply the identical transform client-side. Dev env only — the
 // anon key in the build is the dev project's.
-import { api } from './api.js'
-
 const SB_URL = (import.meta.env.VITE_SUPABASE_URL || '').replace(/\/+$/, '')
 const SB_KEY = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim()
 
@@ -66,14 +64,14 @@ function transformRow(row) {
   }
 }
 
-export async function fetchTaskDetail(taskId, env) {
+export async function fetchTaskDetail(taskId) {
   try {
-    const res = await api(`/api/tasks/${encodeURIComponent(taskId)}?env=${env}`)
+    const res = await fetch(`/api/tasks/${encodeURIComponent(taskId)}`)
     if (res.ok) return await res.json()
   } catch {
     /* fall through to the Supabase fallback */
   }
-  if (!SB_URL || !SB_KEY || env !== 'dev') return null
+  if (!SB_URL || !SB_KEY) return null
   try {
     const url =
       `${SB_URL}/rest/v1/tasks?task_id=eq.${encodeURIComponent(taskId)}` +

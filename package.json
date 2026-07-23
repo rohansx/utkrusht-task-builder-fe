@@ -10,6 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@ngm9/recruiter-client": "file:../recruiter-client/ngm9-recruiter-client-1.4.0.tgz",
     "posthog-js": "^1.402.3",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"
